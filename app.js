@@ -39,7 +39,6 @@
     storageOk: true,
     newBoardType: 'lessons',
     financeView: 'income',
-    moneyCalc: false,
     theme: getTheme(),
     editing: null,
     transactionTarget: null,
@@ -166,6 +165,7 @@
   function refreshRatesFromApi(display){
     if(ratesLoading) return;
     if(typeof fetch!=='function'){ showToast('Автообновление курсов недоступно в этом браузере'); return; }
+    if(typeof navigator!=='undefined' && navigator.onLine===false){ showToast('Нет интернета — курсы валют можно обновить только онлайн'); return; }
     ratesLoading = true;
     showToast('Обновляем курсы…');
     fetch('https://open.er-api.com/v6/latest/'+encodeURIComponent(display))
@@ -422,7 +422,6 @@
     var b = newBoard(name && name.trim() ? name.trim() : 'Новая доска', type);
     state.boards.push(b);
     pendingAnim = 'enter';
-    state.moneyCalc = false;
     state.activeBoardId = b.id;
     state.menuOpen = false;
     state.financeView = 'income';
@@ -432,7 +431,6 @@
   }
   function switchBoard(id){
     pendingAnim = 'enter';
-    state.moneyCalc = false;
     state.activeBoardId = id;
     state.menuOpen = false;
     state.financeView = 'income';
@@ -679,6 +677,12 @@
   var pendingAnim = 'enter'; // 'enter' | 'slide-next' | 'slide-prev' | ''
 
   function render(){
+    var prevCards = app.querySelector('.cards');
+    var savedCards = prevCards ? prevCards.scrollTop : 0;
+    var prevModalEl = app.querySelector('.overlay .modal');
+    var savedModal = prevModalEl ? prevModalEl.scrollTop : 0;
+    var savedWinY = window.pageYOffset;
+    var resetCards = (pendingAnim==='enter');
     var html = '';
     html += renderHeader();
     html += '<div class="layout' + (pendingAnim ? ' ' + pendingAnim : '') + '">';
@@ -696,11 +700,30 @@
     if(state.modal==='schedule-time') html += renderScheduleTimeModal();
     if(state.menuOpen) html += renderMenuDrawer();
     var modalKey = (state.modal || '') + '|' + (state.menuOpen ? 'menu' : '');
-    app.classList.toggle('no-modal-anim', modalKey === lastModalKey);
+    var sameModal = (modalKey === lastModalKey);
+    app.classList.toggle('no-modal-anim', sameModal);
     lastModalKey = modalKey;
     app.innerHTML = html;
     attachHandlers();
     updateNowHighlight();
+    // сохраняем прокрутку: страницы, списка карточек и открытого окна
+    var cardsEl = app.querySelector('.cards');
+    if(cardsEl && !resetCards) cardsEl.scrollTop = savedCards;
+    var modalEl = app.querySelector('.overlay .modal');
+    if(modalEl && sameModal) modalEl.scrollTop = savedModal;
+    if(Math.abs(window.pageYOffset - savedWinY) > 1) window.scrollTo(0, savedWinY);
+  }
+
+  // при «Изменить» в балансе: прокрутить к форме и дважды мигнуть полями
+  function focusBalanceForm(){
+    var f = document.getElementById('balance-form');
+    if(!f) return;
+    f.scrollIntoView({behavior: 'smooth', block: 'center'});
+    setTimeout(function(){
+      f.classList.remove('flash');
+      void f.offsetWidth;
+      f.classList.add('flash');
+    }, 250);
   }
 
   // подсветка урока, который идёт прямо сейчас (таблица расписания)
@@ -1225,7 +1248,6 @@
     var display = (ab.wheelCurrency && CURRENCY_KEYS.indexOf(ab.wheelCurrency)!==-1) ? ab.wheelCurrency : (curs[0] || DEFAULT_CURRENCY);
     var controlsHtml = ''+
       '<div class="wheel-controls">'+
-        '<button type="button" class="btn small primary" data-act="calc-money">'+(state.moneyCalc?'Пересчитать':'Посчитать все деньги')+'</button>'+
         '<label class="mono">Колесо в:</label>'+
         '<select data-act="set-wheel-currency">'+
           CURRENCY_KEYS.map(function(c){ return '<option value="'+c+'"'+(c===display?' selected':'')+'>'+c+' ('+CURRENCIES[c]+')</option>'; }).join('')+
@@ -1236,10 +1258,6 @@
     if(ab.balances.length===0){
       return controlsHtml + '<div class="empty" style="padding:24px 10px;"><div class="display">Балансов пока нет</div>Добавьте их через виджет «Баланс» слева.</div>';
     }
-    if(!state.moneyCalc){
-      return controlsHtml + '<div class="empty" style="padding:24px 10px;"><div class="display">Сколько всего денег?</div>Нажмите «Посчитать все деньги», чтобы увидеть сумму по всем балансам в выбранной валюте.</div>';
-    }
-
     var missing = [];
     var items = ab.balances.map(function(x, idx){
       var rate = getRate(ab, x.currency, display);
@@ -2348,9 +2366,6 @@
       case 'set-theme':
         setTheme(el.dataset.theme);
         break;
-      case 'calc-money':
-        state.moneyCalc = true;
-        render(); break;
       case 'refresh-rates':
         refreshRatesFromApi(el.dataset.to);
         break;
@@ -2462,6 +2477,7 @@
       case 'edit-balance':
         state.editing = {kind:'balance', id: el.dataset.id};
         render();
+        focusBalanceForm();
         break;
       case 'cancel-edit-balance':
         state.editing = null;
