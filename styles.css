@@ -302,3 +302,13 @@ body{transition:background-color .3s, color .3s;}
 .balance-widget-value .balance-line + .balance-line{margin-top:4px;}
 .balance-widget-value .bl-name{color:var(--ink-dim); font-weight:500; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;}
 .balance-widget-value .bl-sum{flex:none; white-space:nowrap;}
+
+/* мигание полей формы баланса при «Изменить»: вкл — выкл — вкл — выкл */
+@keyframes fieldFlash{
+  0%,40%,80%,100%{box-shadow:0 0 0 0 rgba(232,184,75,0); border-color:var(--line-strong);}
+  20%,60%{box-shadow:0 0 0 3px rgba(232,184,75,0.55); border-color:var(--amber);}
+}
+#balance-form.flash input:not([type=hidden]),
+#balance-form.flash select,
+#balance-form.flash .toggle-row{animation:fieldFlash 1.4s ease-in-out 1;}
+#balance-form.flash .toggle-row{border-radius:8px;}
