@@ -57,7 +57,7 @@
   .icon-btn{
     background:var(--surface); border:1px solid var(--line-strong); color:var(--ink);
     width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:16px;
-    display:flex; align-items:center; justify-content:center; transition:background .15s; flex:none;
+    display:flex; align-items:center; justify-content:center; transition:background .15s, transform .15s; flex:none;
   }
   .icon-btn:hover{background:var(--surface-2);}
   .icon-btn.tiny{width:24px; height:24px; font-size:11px;}
@@ -150,7 +150,7 @@
   .cal-dow{display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-bottom:8px;}
   .cal-dow div{text-align:center; font-size:11px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:1px; font-family:'Space Mono',monospace;}
   .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px;}
-  .cal-cell{min-height:78px; background:var(--bg-soft); border:1px solid var(--line); border-radius:9px; padding:6px 6px 7px; cursor:pointer; transition:border-color .15s, background .15s; position:relative;}
+  .cal-cell{min-height:78px; background:var(--bg-soft); border:1px solid var(--line); border-radius:9px; padding:6px 6px 7px; cursor:pointer; transition:border-color .15s, background .15s, transform .15s; position:relative;}
   .cal-cell:hover{border-color:var(--line-strong);}
   .cal-cell.outside{opacity:0.32;}
   .cal-cell.today{border-color:var(--amber); box-shadow:0 0 0 1px var(--amber) inset;}
@@ -244,15 +244,61 @@
   .board-row .board-name{background:none; border:none; color:var(--ink); font-size:14px; font-weight:600; cursor:pointer; text-align:left; padding:0; flex:1; font-family:'Inter',sans-serif; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .board-row.active .board-name{color:var(--amber);}
 
-  .import-banner{
-    background:var(--surface); border:1px solid var(--amber); border-radius:12px;
-    padding:14px 16px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
-  }
-  .import-banner .txt{font-size:13.5px;}
-  .import-banner .txt b{color:var(--amber);}
-  .import-actions{display:flex; gap:8px;}
 
-  .toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--surface-2); border:1px solid var(--line-strong); color:var(--ink); padding:10px 18px; border-radius:10px; font-size:13px; z-index:80; box-shadow:0 10px 24px -10px rgba(0,0,0,0.6); max-width:90vw; text-align:center;}
+  .toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--surface-2); border:1px solid var(--line-strong); color:var(--ink); padding:10px 18px; border-radius:10px; font-size:13px; z-index:80; transition:opacity .25s, transform .25s; box-shadow:0 10px 24px -10px rgba(0,0,0,0.6); max-width:90vw; text-align:center;}
   .storage-warn{font-size:12px; color:var(--rose); margin-bottom:14px; font-family:'Space Mono',monospace;}
   ::-webkit-scrollbar{width:8px;}
   ::-webkit-scrollbar-thumb{background:var(--surface-2); border-radius:8px;}
+
+/* ---------- animations ---------- */
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes rise{from{opacity:0; transform:translateY(10px)}to{opacity:1; transform:none}}
+@keyframes modalIn{from{opacity:0; transform:translateY(14px) scale(.97)}to{opacity:1; transform:none}}
+@keyframes slideNext{from{opacity:0; transform:translateX(26px)}to{opacity:1; transform:none}}
+@keyframes slidePrev{from{opacity:0; transform:translateX(-26px)}to{opacity:1; transform:none}}
+@keyframes pop{from{transform:scale(0)}to{transform:scale(1)}}
+@keyframes toastIn{from{opacity:0; transform:translate(-50%,12px)}to{opacity:1; transform:translate(-50%,0)}}
+
+.overlay{animation:fadeIn .2s ease both;}
+.modal{animation:modalIn .25s cubic-bezier(.2,.8,.3,1) both;}
+#app.no-modal-anim .overlay,
+#app.no-modal-anim .modal{animation:none;}
+
+.toast{animation:toastIn .25s ease backwards;}
+.toast.hide{opacity:0; transform:translate(-50%,12px);}
+
+.layout.enter .cal-grid{animation:fadeIn .35s ease both;}
+.layout.enter .marker{animation:pop .3s .15s cubic-bezier(.3,1.6,.5,1) backwards;}
+
+.layout.slide-next .cal-grid{animation:slideNext .28s ease both;}
+.layout.slide-prev .cal-grid{animation:slidePrev .28s ease both;}
+
+.icon-btn:hover{transform:scale(1.08);}
+.swatch{transition:transform .15s, border-color .15s;}
+.swatch:hover{transform:scale(1.15);}
+.day-toggle, .toggle-btn{transition:background .15s, color .15s, border-color .15s;}
+body{transition:background-color .3s, color .3s;}
+
+/* ---------- урок, который идёт сейчас (таблица расписания) ---------- */
+.schedule-table td{transition:background .3s, box-shadow .3s;}
+.schedule-table tr.now td{
+  background:rgba(232,184,75,0.10);
+  box-shadow:inset 0 2px 0 var(--amber), inset 0 -2px 0 var(--amber);
+}
+.schedule-table tr.now td:first-child{
+  box-shadow:inset 2px 0 0 var(--amber), inset 0 2px 0 var(--amber), inset 0 -2px 0 var(--amber);
+}
+.schedule-table tr.now td:last-child{
+  box-shadow:inset -2px 0 0 var(--amber), inset 0 2px 0 var(--amber), inset 0 -2px 0 var(--amber);
+}
+
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{animation:none !important; transition:none !important;}
+}
+
+.section-title{font-family:'Fraunces',serif; font-size:13px; text-transform:uppercase; letter-spacing:1.2px; color:var(--ink-dim); margin:16px 0 8px;}
+
+.balance-widget-value .balance-line{display:flex; justify-content:space-between; align-items:baseline; gap:10px; min-width:0;}
+.balance-widget-value .balance-line + .balance-line{margin-top:4px;}
+.balance-widget-value .bl-name{color:var(--ink-dim); font-weight:500; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;}
+.balance-widget-value .bl-sum{flex:none; white-space:nowrap;}
