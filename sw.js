@@ -1,5 +1,5 @@
 // Bump this string whenever app.js/styles.css/index.html change so users get the update.
-var CACHE_VERSION = 'lessoncal-v3';
+var CACHE_VERSION = 'lessoncal-v4';
 var APP_SHELL = [
   './',
   './index.html',
