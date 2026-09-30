@@ -39,6 +39,9 @@
     storageOk: true,
     newBoardType: 'lessons',
     financeView: 'income',
+    search: '',
+    confirmDeleteId: null,
+    renameBoardId: null,
     theme: getTheme(),
     editing: null,
     transactionTarget: null,
@@ -70,8 +73,9 @@
   var MONTH_NAMES = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 
   function uid(){ return 'id'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
-  var BOARD_TYPES = ['lessons','events','finance','schedule'];
-  var BOARD_TYPE_LABELS = {lessons:'Занятия', events:'События', finance:'Финансы', schedule:'Расписание'};
+  var BOARD_TYPES = ['lessons','events','finance','schedule','planner'];
+  function isSchedType(t){ return t==='schedule' || t==='planner'; }
+  var BOARD_TYPE_LABELS = {lessons:'Занятия', events:'События', finance:'Финансы', schedule:'Расписание', planner:'Планер задач'};
   function normBoardType(t){ return BOARD_TYPES.indexOf(t)!==-1 ? t : 'lessons'; }
   function newBoard(name, type){
     var t = normBoardType(type);
@@ -110,6 +114,7 @@
         if(typeof t.timeStart!=='string') t.timeStart = '';
         if(typeof t.timeEnd!=='string') t.timeEnd = '';
         if(!t.id) t.id = uid();
+        t.done = !!t.done;
       });
       if(typeof x.name!=='string') x.name = '';
       if(!x.color || COLOR_KEYS.indexOf(x.color)===-1) x.color = COLOR_KEYS[0];
@@ -422,6 +427,7 @@
     var b = newBoard(name && name.trim() ? name.trim() : 'Новая доска', type);
     state.boards.push(b);
     pendingAnim = 'enter';
+    state.search = '';
     state.activeBoardId = b.id;
     state.menuOpen = false;
     state.financeView = 'income';
@@ -431,11 +437,29 @@
   }
   function switchBoard(id){
     pendingAnim = 'enter';
+    state.search = '';
     state.activeBoardId = id;
     state.menuOpen = false;
     state.financeView = 'income';
     state.editing = null;
     state.transactionTarget = null;
+    saveData();
+  }
+  function renameBoard(id, name){
+    var b = state.boards.find(function(x){ return x.id===id; });
+    if(!b) return;
+    b.name = name;
+    showToast('Название изменено');
+    saveData();
+  }
+  function cloneBoard(id){
+    var src = state.boards.find(function(x){ return x.id===id; });
+    if(!src) return;
+    var copy = JSON.parse(JSON.stringify(src));
+    copy.id = uid();
+    copy.name = src.name + ' (копия)';
+    state.boards.splice(state.boards.indexOf(src)+1, 0, copy);
+    showToast('Доска клонирована');
     saveData();
   }
   function deleteBoard(id){
@@ -609,6 +633,15 @@
     t.day = data.day; t.timeStart = data.timeStart || ''; t.timeEnd = data.timeEnd || '';
     saveData();
   }
+  function toggleTaskDone(itemId, timeId){
+    var b = activeBoard();
+    var x = b.scheduleItems.find(function(v){ return v.id===itemId; });
+    if(!x) return;
+    var t = x.times.find(function(v){ return v.id===timeId; });
+    if(!t) return;
+    t.done = !t.done;
+    saveData();
+  }
   function deleteScheduleTime(itemId, timeId){
     var b = activeBoard();
     var x = b.scheduleItems.find(function(v){ return v.id===itemId; });
@@ -698,14 +731,18 @@
     if(state.modal==='history') html += renderTransactionHistoryModal();
     if(state.modal==='settings') html += renderSettingsModal();
     if(state.modal==='schedule-time') html += renderScheduleTimeModal();
-    if(state.menuOpen) html += renderMenuDrawer();
-    var modalKey = (state.modal || '') + '|' + (state.menuOpen ? 'menu' : '');
+    var dialogOpen = !!(state.confirmDeleteId || state.renameBoardId);
+    if(state.menuOpen && !dialogOpen) html += renderMenuDrawer();
+    if(state.confirmDeleteId) html += renderConfirmDeleteBoardModal();
+    if(state.renameBoardId) html += renderRenameBoardModal();
+    var modalKey = (state.modal || '') + '|' + (state.menuOpen ? 'menu' : '') + (state.confirmDeleteId ? '|cd' : '') + (state.renameBoardId ? '|rn' : '');
     var sameModal = (modalKey === lastModalKey);
     app.classList.toggle('no-modal-anim', sameModal);
     lastModalKey = modalKey;
     app.innerHTML = html;
     attachHandlers();
     updateNowHighlight();
+    applySearch();
     // сохраняем прокрутку: страницы, списка карточек и открытого окна
     var cardsEl = app.querySelector('.cards');
     if(cardsEl && !resetCards) cardsEl.scrollTop = savedCards;
@@ -732,9 +769,51 @@
     var hm = nowHM();
     document.querySelectorAll('.schedule-table tr[data-start]').forEach(function(tr){
       var st = tr.dataset.start, en = tr.dataset.end;
-      var on = Number(tr.dataset.day)===nowDow && st && en && hm>=st && hm<en;
+      var on = Number(tr.dataset.day)===nowDow && st && en && hm>=st && hm<en && !tr.classList.contains('is-done');
       tr.classList.toggle('now', !!on);
     });
+  }
+
+  // ---------- поиск по карточкам (боковая панель, все типы досок) ----------
+  function iconSvg(name){
+    var paths = {
+      edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+      copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+      x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'
+    };
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+paths[name]+'</svg>';
+  }
+  function renderSearchBox(){
+    return '<div class="search-box">'+
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>'+
+      '<input type="search" id="card-search" placeholder="Поиск по названию" autocomplete="off" value="'+escapeHtml(state.search||'')+'">'+
+    '</div>';
+  }
+  function applySearch(){
+    var q = (state.search||'').trim().toLowerCase();
+    var wrap = app.querySelector('.cards');
+    if(!wrap) return;
+    var cards = wrap.querySelectorAll('.punch-card');
+    var shown = 0;
+    cards.forEach(function(c){
+      var nm = c.querySelector('.pc-name .txt');
+      var text = (nm ? nm.textContent : '').toLowerCase();
+      var ok = !q || text.indexOf(q)!==-1;
+      c.style.display = ok ? '' : 'none';
+      if(ok) shown++;
+    });
+    var msg = wrap.querySelector('.search-empty');
+    if(cards.length && q && shown===0){
+      if(!msg){
+        msg = document.createElement('div');
+        msg.className = 'search-empty empty';
+        msg.style.padding = '20px 6px';
+        msg.innerHTML = '<div class="display">Ничего не найдено</div>Попробуйте другой запрос.';
+        wrap.appendChild(msg);
+      }
+    } else if(msg){
+      msg.remove();
+    }
   }
 
   function escapeHtml(s){
@@ -747,21 +826,21 @@
     var ab = activeBoard();
     if(ab.type==='events') return renderAddEventModal();
     if(ab.type==='finance') return state.financeView==='expenses' ? renderAddExpenseModal() : renderAddIncomeModal();
-    if(ab.type==='schedule') return renderAddScheduleItemModal();
+    if(isSchedType(ab.type)) return renderAddScheduleItemModal();
     return renderAddSubjectModal();
   }
   function renderDayModal(){
     var ab = activeBoard();
     if(ab.type==='events') return renderEventDayModal();
     if(ab.type==='finance') return renderFinanceDayModal();
-    if(ab.type==='schedule') return renderScheduleDayModal();
+    if(isSchedType(ab.type)) return renderScheduleDayModal();
     return renderLessonDayModal();
   }
 
   function renderHeader(){
     var vd = state.viewDate;
     var ab = activeBoard();
-    var typeLabel = ab.type==='events' ? 'события' : (ab.type==='finance' ? 'финансы' : (ab.type==='schedule' ? 'расписание' : 'занятия'));
+    var typeLabel = ab.type==='events' ? 'события' : (ab.type==='finance' ? 'финансы' : (ab.type==='schedule' ? 'расписание' : (ab.type==='planner' ? 'задачи' : 'занятия')));
     var storageWarn = state.storageOk ? '' :
       '<div class="storage-warn">Локальное хранилище браузера недоступно (например, приватный режим) — изменения не сохранятся.</div>';
     var financeToggle = '';
@@ -791,12 +870,12 @@
     var ab = activeBoard();
     if(ab.type==='events') return renderEventsSidebar(ab);
     if(ab.type==='finance') return state.financeView==='expenses' ? renderExpensesSidebar(ab) : renderIncomeSidebar(ab);
-    if(ab.type==='schedule') return renderScheduleSidebar(ab);
+    if(isSchedType(ab.type)) return renderScheduleSidebar(ab);
     return renderLessonsSidebar(ab);
   }
 
   function renderLessonsSidebar(ab){
-    var html = '<div class="sidebar"><h2>Курсы</h2><div class="cards">';
+    var html = '<div class="sidebar"><h2>Курсы</h2>'+renderSearchBox()+'<div class="cards">';
     if(ab.subjects.length===0){
       html += '<div class="empty" style="padding:20px 6px;"><div class="display">Пока пусто</div>Добавьте первый курс, чтобы начать отсчёт уроков.</div>';
     }
@@ -876,7 +955,7 @@
   }
 
   function renderEventsSidebar(ab){
-    var html = '<div class="sidebar"><h2>События</h2><div class="cards">';
+    var html = '<div class="sidebar"><h2>События</h2>'+renderSearchBox()+'<div class="cards">';
     if(ab.events.length===0){
       html += '<div class="empty" style="padding:20px 6px;"><div class="display">Пока пусто</div>Добавьте первое событие — например, день рождения.</div>';
     }
@@ -921,9 +1000,9 @@
   }
 
   function renderScheduleSidebar(ab){
-    var html = '<div class="sidebar"><h2>Расписание</h2><div class="cards">';
+    var html = '<div class="sidebar"><h2>'+(ab.type==='planner'?'Задачи':'Расписание')+'</h2>'+renderSearchBox()+'<div class="cards">';
     if(ab.scheduleItems.length===0){
-      html += '<div class="empty" style="padding:20px 6px;"><div class="display">Пока пусто</div>Сначала добавьте урок, а потом расставьте дни и время для него.</div>';
+      html += '<div class="empty" style="padding:20px 6px;"><div class="display">Пока пусто</div>'+(ab.type==='planner'?'Сначала добавьте задачу, а потом расставьте дни и время для неё.':'Сначала добавьте урок, а потом расставьте дни и время для него.')+'</div>';
     }
     var sorted = ab.scheduleItems.slice().sort(function(a,b){ return a.name.localeCompare(b.name); });
     sorted.forEach(function(it){
@@ -941,7 +1020,10 @@
           var lbl = DOW_LABELS[DOW_VALUES.indexOf(t.day)] + (timeRangeStr(t) ? ' · '+timeRangeStr(t) : '');
           return ''+
             '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:4px 0;">'+
-              '<span class="mono" style="font-size:12px;">'+lbl+'</span>'+
+              '<span style="display:flex;align-items:center;gap:8px;">'+
+                (ab.type==='planner' ? '<input type="checkbox" class="task-check" data-act="toggle-done" data-item="'+it.id+'" data-time="'+t.id+'"'+(t.done?' checked':'')+'>' : '')+
+                '<span class="mono'+(ab.type==='planner' && t.done ? ' task-done' : '')+'" style="font-size:12px;">'+lbl+'</span>'+
+              '</span>'+
               '<span style="display:flex;gap:4px;">'+
                 '<button class="icon-btn tiny" data-act="edit-schedule-time" data-item="'+it.id+'" data-time="'+t.id+'" title="Изменить">✎</button>'+
                 '<button class="icon-btn tiny" data-act="delete-schedule-time" data-item="'+it.id+'" data-time="'+t.id+'" title="Удалить">✕</button>'+
@@ -967,7 +1049,7 @@
         '</div>';
     });
     html += '</div>';
-    html += '<button class="add-card" data-act="open-add">+ Добавить урок</button>';
+    html += '<button class="add-card" data-act="open-add">+ '+(ab.type==='planner'?'Добавить задачу':'Добавить урок')+'</button>';
     html += '</div>';
     return html;
   }
@@ -993,7 +1075,7 @@
   }
 
   function renderIncomeSidebar(ab){
-    var html = '<div class="sidebar">'+renderBalanceWidget(ab)+'<h2>Доходы</h2><div class="cards">';
+    var html = '<div class="sidebar">'+renderBalanceWidget(ab)+'<h2>Доходы</h2>'+renderSearchBox()+'<div class="cards">';
     if(ab.income.length===0){
       html += '<div class="empty" style="padding:20px 6px;"><div class="display">Пока пусто</div>Добавьте зарплату, инвестиции или другой источник дохода.</div>';
     }
@@ -1039,7 +1121,7 @@
   }
 
   function renderExpensesSidebar(ab){
-    var html = '<div class="sidebar">'+renderBalanceWidget(ab)+'<h2>Расходы</h2><div class="cards">';
+    var html = '<div class="sidebar">'+renderBalanceWidget(ab)+'<h2>Расходы</h2>'+renderSearchBox()+'<div class="cards">';
     if(ab.expenses.length===0){
       html += '<div class="empty" style="padding:20px 6px;"><div class="display">Пока пусто</div>Добавьте статьи расходов, чтобы увидеть их на колесе.</div>';
     }
@@ -1073,11 +1155,12 @@
 
   function renderCalendar(){
     var ab = activeBoard();
-    var compact = (ab.type==='finance') || (ab.type==='schedule');
+    var compact = (ab.type==='finance') || isSchedType(ab.type);
     var html = '<div class="cal-col">';
     html += renderCalendarGrid(compact);
     if(ab.type==='finance') html += (state.financeView==='expenses') ? renderExpenseWheel(ab) : renderMoneyWheel(ab);
     if(ab.type==='schedule') html += renderScheduleTable(ab);
+    if(ab.type==='planner') html += renderPlannerTable(ab);
     html += '</div>';
     return html;
   }
@@ -1125,12 +1208,12 @@
           var tt = exp.name+' · -'+fmtMoney(histEntry.amount, exp.currency);
           markers += '<span class="'+cls+'" title="'+escapeHtml(tt)+'" style="--mc:'+color+'"></span>';
         });
-      } else if(ab.type==='schedule'){
+      } else if(isSchedType(ab.type)){
         ab.scheduleItems.forEach(function(it){
           it.times.forEach(function(t){
             if(t.day!==d.getDay()) return;
             var color = COLORS[it.color] || COLORS.amber;
-            var cls = 'marker' + (ds<=todayStr ? '' : ' outline');
+            var cls = ab.type==='planner' ? ('marker' + (t.done ? '' : ' outline')) : ('marker' + (ds<=todayStr ? '' : ' outline'));
             var tt = it.name + (timeRangeStr(t) ? ' · '+timeRangeStr(t) : '');
             markers += '<span class="'+cls+'" title="'+escapeHtml(tt)+'" style="--mc:'+color+'"></span>';
           });
@@ -1341,6 +1424,54 @@
     return ''+
     '<div class="finance-wheel-wrap" style="display:block;">'+
       '<div class="sub" style="margin-bottom:10px;">Выберите день, чтобы увидеть расписание на него</div>'+
+      dayPicker+
+      '<div class="mono" style="font-size:12px;color:var(--ink-dim);margin-bottom:8px;">'+dayLabel+'</div>'+
+      bodyHtml+
+    '</div>';
+  }
+
+  function renderPlannerTable(ab){
+    var dayPicker = '<div class="day-toggles" style="margin-bottom:14px;">'+
+      DOW_VALUES.map(function(v,idx){
+        return '<button type="button" class="day-toggle'+(state.scheduleDay===v?' active':'')+'" data-act="pick-schedule-day" data-day="'+v+'">'+DOW_LABELS[idx]+'</button>';
+      }).join('')+
+    '</div>';
+    var rows = [];
+    ab.scheduleItems.forEach(function(it){
+      it.times.forEach(function(t){
+        if(t.day===state.scheduleDay) rows.push({item: it, t: t});
+      });
+    });
+    var byTime = function(a,b){ return (a.t.timeStart||'').localeCompare(b.t.timeStart||''); };
+    var pending = rows.filter(function(r){ return !r.t.done; }).sort(byTime);
+    var done = rows.filter(function(r){ return r.t.done; }).sort(byTime);
+    var dayLabel = DOW_LABELS[DOW_VALUES.indexOf(state.scheduleDay)];
+
+    function rowHtml(r){
+      var it = r.item, t = r.t;
+      var color = COLORS[it.color] || COLORS.amber;
+      return '<tr class="task-row'+(t.done?' is-done':'')+'" data-day="'+t.day+'" data-start="'+(t.timeStart||'')+'" data-end="'+(t.timeEnd||'')+'">'+
+        '<td class="chk"><input type="checkbox" class="task-check" data-act="toggle-done" data-item="'+it.id+'" data-time="'+t.id+'"'+(t.done?' checked':'')+'></td>'+
+        '<td class="mono">'+(t.timeStart||'—')+'</td>'+
+        '<td class="mono">'+(t.timeEnd||'—')+'</td>'+
+        '<td><span class="task-text'+(t.done?' task-done':'')+'"><span class="dot" style="background:'+color+';display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;"></span>'+escapeHtml(it.name)+(it.notes?'<br><span class="dim" style="font-size:11.5px;">'+escapeHtml(it.notes)+'</span>':'')+'</span></td>'+
+      '</tr>';
+    }
+    function section(title, list){
+      return '<tr class="sec-row"><td colspan="4">'+title+' · '+list.length+'</td></tr>'+
+        (list.length ? list.map(rowHtml).join('') : '<tr><td colspan="4" class="dim" style="font-size:12px;">Пусто</td></tr>');
+    }
+    var bodyHtml;
+    if(rows.length===0){
+      bodyHtml = '<div class="empty" style="padding:24px 10px;"><div class="display">Пусто</div>На этот день пока нет задач.</div>';
+    } else {
+      bodyHtml = '<table class="schedule-table"><thead><tr><th></th><th>Начало</th><th>Конец</th><th>Задача</th></tr></thead><tbody>'+
+        section('Не выполнено', pending)+section('Выполнено', done)+
+      '</tbody></table>';
+    }
+    return ''+
+    '<div class="finance-wheel-wrap" style="display:block;">'+
+      '<div class="sub" style="margin-bottom:10px;">Выберите день, чтобы увидеть задачи на него</div>'+
       dayPicker+
       '<div class="mono" style="font-size:12px;color:var(--ink-dim);margin-bottom:8px;">'+dayLabel+'</div>'+
       bodyHtml+
@@ -1585,23 +1716,24 @@
   }
 
   function renderAddScheduleItemModal(){
+    var pl = activeBoard().type==='planner';
     var editing = (state.editing && state.editing.kind==='schedule') ? activeBoard().scheduleItems.find(function(x){ return x.id===state.editing.id; }) : null;
     return ''+
     '<div class="overlay">'+
       '<div class="modal" data-stop="1">'+
         '<button class="close-x" data-act="close-modal">✕</button>'+
-        '<h3 class="display">'+(editing?'Изменить урок':'Новый урок')+'</h3>'+
-        '<div class="sub">Сначала добавьте сам урок — дни и время для него можно будет расставить после, кнопкой «+» на карточке</div>'+
+        '<h3 class="display">'+(editing ? (pl?'Изменить задачу':'Изменить урок') : (pl?'Новая задача':'Новый урок'))+'</h3>'+
+        '<div class="sub">Сначала добавьте '+(pl?'саму задачу':'сам урок')+' — дни и время для '+(pl?'неё':'него')+' можно будет расставить после, кнопкой «+» на карточке</div>'+
         '<form id="add-schedule-form">'+
           (editing?'<input type="hidden" name="editId" value="'+editing.id+'">':'')+
-          '<div class="field"><label>Название</label><input type="text" name="name" placeholder="Например, математика" value="'+(editing?escapeHtml(editing.name):'')+'" required></div>'+
+          '<div class="field"><label>Название</label><input type="text" name="name" placeholder="'+(pl?'Например, купить продукты':'Например, математика')+'" value="'+(editing?escapeHtml(editing.name):'')+'" required></div>'+
           '<div class="field"><label>Цвет</label><div class="color-picker">'+
             COLOR_KEYS.map(function(k){
               var active = editing ? (editing.color===k) : (k===COLOR_KEYS[0]);
               return '<div class="swatch'+(active?' active':'')+'" data-color="'+k+'" style="background:'+COLORS[k]+'"></div>';
             }).join('')+
           '</div><input type="hidden" name="color" value="'+(editing?editing.color:COLOR_KEYS[0])+'"></div>'+
-          '<div class="field"><label>Описание (необязательно)</label><textarea name="notes" placeholder="Кабинет, преподаватель, детали...">'+(editing?escapeHtml(editing.notes||''):'')+'</textarea></div>'+
+          '<div class="field"><label>Описание (необязательно)</label><textarea name="notes" placeholder="'+(pl?'Детали, ссылки, заметки...':'Кабинет, преподаватель, детали...')+'">'+(editing?escapeHtml(editing.notes||''):'')+'</textarea></div>'+
           '<div class="modal-actions">'+
             '<button type="button" class="btn" data-act="close-modal">Отмена</button>'+
             '<button type="submit" class="btn primary">'+(editing?'Сохранить':'Добавить')+'</button>'+
@@ -1626,7 +1758,7 @@
       '<div class="modal" data-stop="1">'+
         '<button class="close-x" data-act="close-modal">✕</button>'+
         '<h3 class="display">'+(editingTime?'Изменить время':'Добавить время')+'</h3>'+
-        '<div class="sub">Для урока «'+escapeHtml(item.name)+'» — выберите день и укажите время</div>'+
+        '<div class="sub">'+(ab.type==='planner'?'Для задачи':'Для урока')+' «'+escapeHtml(item.name)+'» — выберите день и укажите время</div>'+
         '<form id="schedule-time-form">'+
           '<input type="hidden" name="itemId" value="'+item.id+'">'+
           (editingTime?'<input type="hidden" name="timeId" value="'+editingTime.id+'">':'')+
@@ -1667,7 +1799,10 @@
       rows.forEach(function(r){
         var it = r.item, t = r.t;
         var color = COLORS[it.color] || COLORS.amber;
-        var head = '<div class="day-item-head"><span class="dot" style="background:'+color+'"></span><span class="nm">'+escapeHtml(it.name)+'</span></div>';
+        var isPl = ab.type==='planner';
+        var head = '<div class="day-item-head">'+
+          (isPl ? '<input type="checkbox" class="task-check" data-act="toggle-done" data-item="'+it.id+'" data-time="'+t.id+'"'+(t.done?' checked':'')+'>' : '')+
+          '<span class="dot" style="background:'+color+'"></span><span class="nm'+(isPl && t.done ? ' task-done' : '')+'">'+escapeHtml(it.name)+'</span></div>';
         var timeStr = timeRangeStr(t);
         var b2 = (timeStr?'<div class="status">'+timeStr+'</div>':'')+(it.notes?'<div class="status dim">'+escapeHtml(it.notes)+'</div>':'')+
           '<div class="row-actions">'+
@@ -1924,7 +2059,11 @@
       var tag = '<span class="mono dim" style="font-size:10px;">'+BOARD_TYPE_LABELS[b.type]+'</span>';
       return '<div class="board-row'+(active?' active':'')+'">'+
         '<button class="board-name" data-act="switch-board" data-id="'+b.id+'">'+escapeHtml(b.name)+' '+tag+'</button>'+
-        (state.boards.length>1 ? '<button class="icon-btn tiny" data-act="delete-board" data-id="'+b.id+'" title="Удалить доску">✕</button>' : '')+
+        '<span class="board-actions">'+
+          '<button class="icon-btn tiny" data-act="rename-board" data-id="'+b.id+'" title="Переименовать">'+iconSvg('edit')+'</button>'+
+          '<button class="icon-btn tiny" data-act="clone-board" data-id="'+b.id+'" title="Клонировать">'+iconSvg('copy')+'</button>'+
+          (state.boards.length>1 ? '<button class="icon-btn tiny" data-act="delete-board" data-id="'+b.id+'" title="Удалить доску">'+iconSvg('x')+'</button>' : '')+
+        '</span>'+
       '</div>';
     }).join('');
 
@@ -1955,6 +2094,41 @@
         '</div>'+
         '<div class="drawer-hr"></div>'+
         '<button type="button" class="btn" style="width:100%;" data-act="open-settings">⚙ Настройки</button>'+
+      '</div>'+
+    '</div>';
+  }
+
+  function renderConfirmDeleteBoardModal(){
+    var b = state.boards.find(function(x){ return x.id===state.confirmDeleteId; });
+    if(!b) return '';
+    return ''+
+    '<div class="overlay">'+
+      '<div class="modal" data-stop="1">'+
+        '<h3 class="display">Удалить доску?</h3>'+
+        '<div class="sub">Вы точно хотите удалить эту доску? «'+escapeHtml(b.name)+'» и все её данные будут удалены без возможности восстановления.</div>'+
+        '<div class="modal-actions">'+
+          '<button type="button" class="btn" data-act="cancel-dialog">Нет</button>'+
+          '<button type="button" class="btn danger" data-act="confirm-delete-board">Да</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }
+  function renderRenameBoardModal(){
+    var b = state.boards.find(function(x){ return x.id===state.renameBoardId; });
+    if(!b) return '';
+    return ''+
+    '<div class="overlay">'+
+      '<div class="modal" data-stop="1">'+
+        '<button class="close-x" data-act="cancel-dialog">✕</button>'+
+        '<h3 class="display">Название доски</h3>'+
+        '<div class="sub">Введите новое название</div>'+
+        '<form id="rename-board-form">'+
+          '<div class="field"><input type="text" name="name" value="'+escapeHtml(b.name)+'" required></div>'+
+          '<div class="modal-actions">'+
+            '<button type="button" class="btn" data-act="cancel-dialog">Отмена</button>'+
+            '<button type="submit" class="btn primary">Сохранить</button>'+
+          '</div>'+
+        '</form>'+
       '</div>'+
     '</div>';
   }
@@ -2002,9 +2176,32 @@
     });
     app.querySelectorAll('.overlay').forEach(function(overlay){
       overlay.addEventListener('click', function(ev){
+        if(ev.target===overlay && (state.confirmDeleteId || state.renameBoardId)){ state.confirmDeleteId=null; state.renameBoardId=null; render(); return; }
         if(ev.target===overlay){ state.modal=null; state.menuOpen=false; state.editing=null; state.transactionTarget=null; state.scheduleTimeTarget=null; render(); }
       });
     });
+
+    var renameForm = document.getElementById('rename-board-form');
+    if(renameForm){
+      var renameInput = renameForm.querySelector('input[name=name]');
+      renameInput.focus(); renameInput.select();
+      renameForm.addEventListener('submit', function(ev){
+        ev.preventDefault();
+        var name = renameInput.value.trim();
+        if(!name){ showToast('Введите название'); return; }
+        var id = state.renameBoardId;
+        state.renameBoardId = null;
+        renameBoard(id, name);
+      });
+    }
+
+    var searchEl = document.getElementById('card-search');
+    if(searchEl){
+      searchEl.addEventListener('input', function(){
+        state.search = searchEl.value;
+        applySearch();
+      });
+    }
 
     var addForm = document.getElementById('add-form');
     if(addForm){
@@ -2361,6 +2558,7 @@
         render(); break;
       case 'finance-view':
         state.financeView = el.dataset.view === 'expenses' ? 'expenses' : 'income';
+        state.search = '';
         pendingAnim = 'enter';
         render(); break;
       case 'set-theme':
@@ -2445,6 +2643,10 @@
       case 'delete-schedule-time':
         ev.stopPropagation();
         deleteScheduleTime(el.dataset.item, el.dataset.time);
+        break;
+      case 'toggle-done':
+        ev.stopPropagation();
+        toggleTaskDone(el.dataset.item, el.dataset.time);
         break;
       case 'pick-schedule-day':
         state.scheduleDay = Number(el.dataset.day);
@@ -2531,7 +2733,29 @@
         break;
       case 'delete-board':
         ev.stopPropagation();
-        deleteBoard(el.dataset.id);
+        state.confirmDeleteId = el.dataset.id;
+        render();
+        break;
+      case 'confirm-delete-board':
+        (function(){
+          var id = state.confirmDeleteId;
+          state.confirmDeleteId = null;
+          deleteBoard(id);
+        })();
+        break;
+      case 'rename-board':
+        ev.stopPropagation();
+        state.renameBoardId = el.dataset.id;
+        render();
+        break;
+      case 'clone-board':
+        ev.stopPropagation();
+        cloneBoard(el.dataset.id);
+        break;
+      case 'cancel-dialog':
+        state.confirmDeleteId = null;
+        state.renameBoardId = null;
+        render();
         break;
       case 'create-board':
         var nameInput = document.getElementById('new-board-name');
