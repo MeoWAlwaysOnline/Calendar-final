@@ -312,3 +312,31 @@ body{transition:background-color .3s, color .3s;}
 #balance-form.flash select,
 #balance-form.flash .toggle-row{animation:fieldFlash 1.4s ease-in-out 1;}
 #balance-form.flash .toggle-row{border-radius:8px;}
+
+/* ---------- планер задач ---------- */
+.task-check{width:18px; height:18px; accent-color:var(--amber); cursor:pointer; flex:none; margin:0;}
+.task-text, .task-done{transition:color .2s;}
+.task-done{text-decoration:line-through; text-decoration-thickness:1.5px; color:var(--ink-faint);}
+.schedule-table td.chk{width:34px; padding-right:0;}
+.schedule-table tr.sec-row td{
+  font-family:'Space Mono',monospace; font-size:11px; text-transform:uppercase; letter-spacing:0.8px;
+  color:var(--ink-dim); background:var(--surface-2); padding:6px 8px; border-bottom:none;
+}
+.schedule-table tr.is-done td{opacity:0.75;}
+.day-item-head .task-check{margin-right:2px;}
+
+/* ---------- поиск по карточкам ---------- */
+.search-box{position:relative; margin:0 0 12px;}
+.search-box svg{position:absolute; left:12px; top:50%; transform:translateY(-50%); width:16px; height:16px; color:var(--ink-faint); pointer-events:none;}
+.search-box input{
+  width:100%; -webkit-appearance:none; appearance:none;
+  background:var(--surface); border:1px solid var(--line-strong); color:var(--ink);
+  border-radius:10px; padding:9px 12px 9px 36px; font-family:'Inter',sans-serif; font-size:16px;
+  transition:border-color .15s;
+}
+.search-box input:focus{outline:none; border-color:var(--amber);}
+.search-box input::placeholder{color:var(--ink-faint);}
+
+/* ---------- меню досок: кружки-иконки ---------- */
+.board-row .board-actions{display:flex; gap:5px; flex:none;}
+.icon-btn.tiny svg{width:12px; height:12px; pointer-events:none;}
