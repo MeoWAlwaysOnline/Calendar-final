@@ -1,5 +1,7 @@
-(function(){
+function lessoncalBoot(){
   "use strict";
+  // тестовая дата из админ-панели (только если включён админ-режим)
+  var FAKE_TODAY = (function(){ try{ var v = localStorage.getItem('lessoncal_fake_today'); return (localStorage.getItem('lessoncal_admin')==='1' && /^\d{4}-\d{2}-\d{2}$/.test(v||'')) ? v : ''; }catch(e){ return ''; } })();
 
   // ---------- языки интерфейса ----------
   var LANG_KEY = 'lessoncal_lang';
@@ -8,9 +10,8 @@
     try{
       var v = localStorage.getItem(LANG_KEY);
       if(v==='auto' || LANGS.indexOf(v)!==-1) return v;
-      // у тех, кто уже пользовался приложением, по умолчанию остаётся русский
-      return localStorage.getItem('lessoncal_boards_v1') ? 'ru' : 'auto';
-    }catch(e){ return 'ru'; }
+      return 'auto'; // по умолчанию — язык системы
+    }catch(e){ return 'auto'; }
   }
   function detectSystemLang(){
     var list = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language || 'en'];
@@ -25,21 +26,9 @@
   var LANG_PREF = getLangPref();
   var LANG = LANG_PREF==='auto' ? detectSystemLang() : LANG_PREF;
   var LOCALE = {ru:'ru-RU', uk:'uk-UA', en:'en-GB'}[LANG];
-  var I18N = {
-    en: {"Пн":"Mo","Вт":"Tu","Ср":"We","Чт":"Th","Пт":"Fr","Сб":"Sa","Вс":"Su","января":"January","февраля":"February","марта":"March","апреля":"April","мая":"May","июня":"June","июля":"July","августа":"August","сентября":"September","октября":"October","ноября":"November","декабря":"December","<input type=\"text\" class=\"tp-h\" inputmode=\"numeric\" autocomplete=\"off\" maxlength=\"2\" placeholder=\"чч\" aria-label=\"Часы\" value=\"":"<input type=\"text\" class=\"tp-h\" inputmode=\"numeric\" autocomplete=\"off\" maxlength=\"2\" placeholder=\"hh\" aria-label=\"Hours\" value=\"","<input type=\"text\" class=\"tp-m\" inputmode=\"numeric\" autocomplete=\"off\" maxlength=\"2\" placeholder=\"мм\" aria-label=\"Минуты\" value=\"":"<input type=\"text\" class=\"tp-m\" inputmode=\"numeric\" autocomplete=\"off\" maxlength=\"2\" placeholder=\"mm\" aria-label=\"Minutes\" value=\"","<div class=\"field-hint\">Начало — конец. Напишите часы, и курсор сам перейдёт к минутам.</div>":"<div class=\"field-hint\">Start — end. Type the hours and the cursor jumps to minutes by itself.</div>","Январь":"January","Февраль":"February","Март":"March","Апрель":"April","Май":"May","Июнь":"June","Июль":"July","Август":"August","Сентябрь":"September","Октябрь":"October","Ноябрь":"November","Декабрь":"December","янв":"Jan","фев":"Feb","мар":"Mar","апр":"Apr","май":"May","июн":"Jun","июл":"Jul","авг":"Aug","сен":"Sep","окт":"Oct","ноя":"Nov","дек":"Dec","понедельник":"monday","вторник":"tuesday","среда":"wednesday","четверг":"thursday","пятница":"friday","суббота":"saturday","воскресенье":"sunday","Занятия":"Lessons","События":"Events","Финансы":"Finance","Расписание":"Schedule","Планер задач":"Task planner","Автообновление курсов недоступно в этом браузере":"Automatic rate updates are not available in this browser","Нет интернета — курсы валют можно обновить только онлайн":"No internet — exchange rates can only be updated online","Обновляем курсы…":"Updating rates…","Не удалось получить курсы":"Could not get exchange rates","Курсы обновлены":"Rates updated","Курсы не изменились":"Rates did not change","Не удалось получить курсы — проверьте подключение к интернету":"Could not get exchange rates — check your internet connection","Мой календарь":"My calendar","Отменить":"Undo","Восстановлено":"Restored","Доски заменены копией":"Boards replaced with the backup","Доски из копии добавлены":"Boards from the backup added","Копия всех досок сохранена":"Backup of all boards saved","Доска добавлена":"Board added","Не удалось прочитать файл — это не файл доски или копии":"Could not read the file — it is not a board or backup file","Не удалось прочитать файл":"Could not read the file","Новая доска":"New board","Название изменено":"Name changed"," (копия)":" (copy)","Доска клонирована":"Board cloned","Нельзя удалить последнюю доску":"You can't delete the last board","оплата курса":"course payment"," · расход записан в «":" · expense saved to «","Курс «":"Course «","» продлён":"» renewed","абонемент закончился ":"membership ended ","абонемент заканчивается сегодня":"membership ends today","абонемент закончится через ":"membership ends in ","день":"day","дня":"days","дней":"days","уроки закончились, сверх оплаты: ":"lessons used up, unpaid extra: ","оплаченные уроки закончились":"paid lessons are used up","остался ":"only ","осталось ":"only ","урок":"lesson","урока":"lessons","уроков":"lessons","</b><div class=\"notice-sub\">Пора оплатить: ":"</b><div class=\"notice-sub\">Time to pay: ",">Продлить</button></div>":">Renew</button></div>","<div class=\"notice warn\"><div class=\"notice-title\">Напоминание об оплате</div>":"<div class=\"notice warn\"><div class=\"notice-title\">Payment reminder</div>","<div class=\"fin-box\"><div class=\"fin-title\">Записать в расходы</div><div class=\"field-hint\" style=\"margin:0;\">Создайте доску «Финансы» — тогда оплаты курсов будут сразу попадать в расходы.</div></div>":"<div class=\"fin-box\"><div class=\"fin-title\">Save as expense</div><div class=\"field-hint\" style=\"margin:0;\">Create a «Finance» board — then course payments will go straight into expenses.</div></div>","<div class=\"fin-title\">Записать в расходы</div>":"<div class=\"fin-title\">Save as expense</div>","<div class=\"field\"><label>Доска</label><select name=\"finBoard\">":"<div class=\"field\"><label>Board</label><select name=\"finBoard\">","<option value=\"\">Не записывать</option>":"<option value=\"\">Don't save</option>","<div class=\"field\" data-fin-dep><label>Категория расхода</label><select name=\"finExpense\"></select></div>":"<div class=\"field\" data-fin-dep><label>Expense category</label><select name=\"finExpense\"></select></div>","<div class=\"field\" data-fin-dep><label>Списать со счёта</label><select name=\"finBalance\"></select></div>":"<div class=\"field\" data-fin-dep><label>Take from account</label><select name=\"finBalance\"></select></div>","<div class=\"field-hint\" data-fin-dep style=\"margin-top:-6px;\">Расход запишется, только если указана сумма оплаты. Категории показаны в выбранной валюте.</div>":"<div class=\"field-hint\" data-fin-dep style=\"margin-top:-6px;\">The expense is saved only if a payment amount is entered. Categories are shown in the selected currency.</div>","<div class=\"field\"><label>Оплачено до</label><input type=\"date\" name=\"until\" value=\"":"<div class=\"field\"><label>Paid until</label><input type=\"date\" name=\"until\" value=\"","<div class=\"field-hint\">Сейчас: ":"<div class=\"field-hint\">Now: ","до ":"until ","дата не указана":"no date set","<div class=\"field\"><label>Сколько уроков добавить</label><input type=\"number\" name=\"lessons\" min=\"1\" step=\"1\" value=\"":"<div class=\"field\"><label>How many lessons to add</label><input type=\"number\" name=\"lessons\" min=\"1\" step=\"1\" value=\"","<div class=\"field-hint\">Сейчас осталось ":"<div class=\"field-hint\">Lessons left now: "," из ":" of ","продление":"renewal","<span class=\"dim\">без суммы</span>":"<span class=\"dim\">no amount</span>","\">Удалить</button></div>":"\">Delete</button></div>","<h3 class=\"display\">Продлить «":"<h3 class=\"display\">Renew «","Укажите новую дату окончания абонемента":"Set the new membership end date","Добавьте оплаченные уроки":"Add the paid lessons"," и, если хотите, сумму — она попадёт в историю оплат.</div>":" and, if you like, the amount — it will go into the payment history.</div>","<div class=\"field\" style=\"flex:2;\"><label>Сумма <span class=\"dim\">(необязательно)</span></label><input type=\"number\" name=\"amount\" min=\"0\" step=\"0.01\" placeholder=\"0\"></div>":"<div class=\"field\" style=\"flex:2;\"><label>Amount <span class=\"dim\">(optional)</span></label><input type=\"number\" name=\"amount\" min=\"0\" step=\"0.01\" placeholder=\"0\"></div>","<div class=\"field\" style=\"flex:1;\"><label>Валюта</label><select name=\"currency\">":"<div class=\"field\" style=\"flex:1;\"><label>Currency</label><select name=\"currency\">","<div class=\"field\" style=\"margin-top:16px;\"><label>Дата оплаты</label><input type=\"date\" name=\"date\" value=\"":"<div class=\"field\" style=\"margin-top:16px;\"><label>Payment date</label><input type=\"date\" name=\"date\" value=\"","<button type=\"button\" class=\"btn\" data-act=\"close-modal\">Отмена</button>":"<button type=\"button\" class=\"btn\" data-act=\"close-modal\">Cancel</button>","<button type=\"submit\" class=\"btn primary\">Продлить</button>":"<button type=\"submit\" class=\"btn primary\">Renew</button>","<div class=\"section-title\">История оплат":"<div class=\"section-title\">Payment history"," <span class=\"dim\">· всего ":" <span class=\"dim\">· total ","<div class=\"empty\" style=\"padding:12px 6px;\">Оплат пока нет.</div>":"<div class=\"empty\" style=\"padding:12px 6px;\">No payments yet.</div>","весь день":"all day","прошло":"done","впереди":"upcoming","сегодня":"today","через ":"in ","бюджет":"budget","превышен":"exceeded","\">Открыть</button>":"\">Open</button>","<div class=\"sub\">Всё важное на сегодня со всех досок</div>":"<div class=\"sub\">Everything important for today from all boards</div>","<div class=\"empty\" style=\"padding:26px 6px;\"><div class=\"display\">Свободный день</div>На сегодня ничего не запланировано.</div>":"<div class=\"empty\" style=\"padding:26px 6px;\"><div class=\"display\">A free day</div>Nothing planned for today.</div>","<h3 class=\"display\">Восстановить копию?</h3>":"<h3 class=\"display\">Restore the backup?</h3>","<div class=\"sub\">В файле ":"<div class=\"sub\">The file has ","доска":"board","доски":"boards","досок":"boards",". Можно добавить их к текущим или заменить все текущие доски.</div>":". You can add them to the current ones or replace all current boards.</div>","<button type=\"button\" class=\"btn primary\" data-act=\"backup-add\">Добавить к текущим</button>":"<button type=\"button\" class=\"btn primary\" data-act=\"backup-add\">Add to current</button>","<button type=\"button\" class=\"btn danger\" data-act=\"backup-replace\">Заменить все</button>":"<button type=\"button\" class=\"btn danger\" data-act=\"backup-replace\">Replace all</button>","<button type=\"button\" class=\"btn\" data-act=\"cancel-dialog\">Отмена</button>":"<button type=\"button\" class=\"btn\" data-act=\"cancel-dialog\">Cancel</button>","начальная сумма":"initial amount","Курс удалён":"Course deleted","Событие удалено":"Event deleted","Доход удалён":"Income deleted","Расход удалён":"Expense deleted","Задача удалена":"Task deleted","Урок удалён":"Lesson deleted","Удалено":"Deleted","Зачислено на «":"Credited to «","счёт":"account","Выплата отмечена":"Payment marked","Перенесено на ":"Moved to ","<input type=\"search\" id=\"card-search\" placeholder=\"Поиск по названию\" autocomplete=\"off\" value=\"":"<input type=\"search\" id=\"card-search\" placeholder=\"Search by name\" autocomplete=\"off\" value=\"","<div class=\"display\">Ничего не найдено</div>Попробуйте другой запрос.":"<div class=\"display\">Nothing found</div>Try a different search.","события":"events","финансы":"finance","расписание":"schedule","задачи":"tasks","занятия":"lessons","<div class=\"storage-warn\">Локальное хранилище браузера недоступно (например, приватный режим) — изменения не сохранятся.</div>":"<div class=\"storage-warn\">Browser storage is unavailable (e.g. private mode) — changes will not be saved.</div>","\" data-act=\"finance-view\" data-view=\"income\">Доходы</button>":"\" data-act=\"finance-view\" data-view=\"income\">Income</button>","\" data-act=\"finance-view\" data-view=\"expenses\">Расходы</button>":"\" data-act=\"finance-view\" data-view=\"expenses\">Expenses</button>","<button class=\"icon-btn\" data-act=\"open-menu\" title=\"Доски\">☰</button>":"<button class=\"icon-btn\" data-act=\"open-menu\" title=\"Boards\">☰</button>","<div><h1 class=\"display\">Календарь<span>Доска: <b>":"<div><h1 class=\"display\">Calendar<span>Board: <b>","<button class=\"btn small\" data-act=\"today\">Сегодня</button>":"<button class=\"btn small\" data-act=\"today\">Today</button>","<button class=\"btn small\" data-act=\"open-summary\">Сводка</button>":"<button class=\"btn small\" data-act=\"open-summary\">Summary</button>","<h2>Курсы</h2>":"<h2>Courses</h2>","<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Пока пусто</div>Добавьте первый курс, чтобы начать отсчёт уроков.</div>":"<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Nothing here yet</div>Add your first course to start counting lessons.</div>"," · с ":" · from ","<span class=\"dim\">Дата окончания не указана</span>":"<span class=\"dim\">End date not set</span>","<span class=\"warn\">Абонемент истёк ":"<span class=\"warn\">Membership expired ","<span class=\"warn\">Осталось ":"<span class=\"warn\">Left "," дн. (до ":" days (until ","Оплачено до <b>":"Paid until <b>","Абонемент до <span class=\"pc-total-edit\"><input type=\"date\" class=\"mono\" data-act=\"edit-paiduntil\" data-id=\"":"Membership until <span class=\"pc-total-edit\"><input type=\"date\" class=\"mono\" data-act=\"edit-paiduntil\" data-id=\"","<span class=\"warn\">Превышение на ":"<span class=\"warn\">Over by "," — увеличьте количество уроков</span>":" — increase the number of lessons</span>","<span class=\"warn\">Уроки закончились</span>":"<span class=\"warn\">No lessons left</span>","Хватит до <b>":"Lasts until <b>","<span class=\"dim\">хватит более чем на 3 года вперёд</span>":"<span class=\"dim\">lasts more than 3 years ahead</span>","Осталось <b>":"Left <b>","</b> из ":"</b> of ","\" title=\"Продлить и история оплат\" style=\"width:26px;height:26px;font-size:13px;\">↻</button>":"\" title=\"Renew and payment history\" style=\"width:26px;height:26px;font-size:13px;\">↻</button>","\" title=\"Изменить\" style=\"width:26px;height:26px;font-size:12px;\">✎</button>":"\" title=\"Edit\" style=\"width:26px;height:26px;font-size:12px;\">✎</button>","\" title=\"Удалить\" style=\"width:26px;height:26px;font-size:13px;\">✕</button>":"\" title=\"Delete\" style=\"width:26px;height:26px;font-size:13px;\">✕</button>","<div class=\"pc-paid\">Оплачено всего: <b>":"<div class=\"pc-paid\">Paid in total: <b>","<button class=\"add-card\" data-act=\"open-add\">+ Добавить курс</button>":"<button class=\"add-card\" data-act=\"open-add\">+ Add course</button>","<div class=\"sidebar\"><h2>События</h2>":"<div class=\"sidebar\"><h2>Events</h2>","<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Пока пусто</div>Добавьте первое событие — например, день рождения.</div>":"<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Nothing here yet</div>Add your first event — a birthday, for example.</div>","Ежегодно · ":"Yearly · ","<b style=\"color:var(--today)\">Сегодня!</b>":"<b style=\"color:var(--today)\">Today!</b>"," дн.":" days","<span class=\"dim\">прошло</span>":"<span class=\"dim\">done</span>","<button class=\"add-card\" data-act=\"open-add\">+ Добавить событие</button>":"<button class=\"add-card\" data-act=\"open-add\">+ Add event</button>","Задачи":"Tasks","<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Пока пусто</div>":"<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Nothing here yet</div>","Сначала добавьте задачу, а потом расставьте дни и время для неё.":"Add a task first, then set days and times for it.","Сначала добавьте урок, а потом расставьте дни и время для него.":"Add a lesson first, then set days and times for it.","<div class=\"dim\" style=\"font-size:12px;\">Дни и время ещё не заданы</div>":"<div class=\"dim\" style=\"font-size:12px;\">Days and times not set yet</div>"," <span class=\"tag\">разово</span>":" <span class=\"tag\">once</span>","\" title=\"Изменить\">✎</button>":"\" title=\"Edit\">✎</button>","\" title=\"Удалить\">✕</button>":"\" title=\"Delete\">✕</button>","\" title=\"Добавить день и время\" style=\"width:26px;height:26px;font-size:14px;\">+</button>":"\" title=\"Add day and time\" style=\"width:26px;height:26px;font-size:14px;\">+</button>","Добавить задачу":"Add task","Добавить урок":"Add lesson","Основной":"Main","Добавить баланс":"Add balance","<div class=\"balance-widget-label\">Баланс</div>":"<div class=\"balance-widget-label\">Balance</div>","<h2>Доходы</h2>":"<h2>Income</h2>","<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Пока пусто</div>Добавьте зарплату, инвестиции или другой источник дохода.</div>":"<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Nothing here yet</div>Add a salary, investments or another source of income.</div>","Ежемесячно · ":"Monthly · day "," числа":" ","Разово · ":"Once · ","\" title=\"Добавить сумму\" style=\"width:26px;height:26px;font-size:14px;\">+</button>":"\" title=\"Add amount\" style=\"width:26px;height:26px;font-size:14px;\">+</button>","<button class=\"add-card\" data-act=\"open-add\">+ Добавить доход</button>":"<button class=\"add-card\" data-act=\"open-add\">+ Add income</button>","Остальное: <b>":"Rest: <b>","<span class=\"warn\">Подкатегории больше суммы на ":"<span class=\"warn\">Subcategories exceed the amount by ","<h2>Расходы</h2>":"<h2>Expenses</h2>","<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Пока пусто</div>Добавьте статьи расходов, чтобы увидеть их на колесе.</div>":"<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Nothing here yet</div>Add expense items to see them on the wheel.</div>","% от расходов в ":"% of expenses in ","<button class=\"add-card\" data-act=\"open-add\">+ Добавить расход</button>":"<button class=\"add-card\" data-act=\"open-add\">+ Add expense</button>"," · не будет":" · won't come"," · ждёт подтверждения":" · awaiting confirmation"," · получено":" · received","<label class=\"mono\">Колесо в:</label>":"<label class=\"mono\">Wheel in:</label>","\">Обновить курсы</button>":"\">Update rates</button>","<button type=\"button\" class=\"btn small\" data-act=\"open-rates\">Курсы валют</button>":"<button type=\"button\" class=\"btn small\" data-act=\"open-rates\">Exchange rates</button>","<button type=\"button\" class=\"btn small\" data-act=\"open-history\">История транзакций</button>":"<button type=\"button\" class=\"btn small\" data-act=\"open-history\">Transaction history</button>","<div class=\"empty\" style=\"padding:24px 10px;\"><div class=\"display\">Колесо пусто</div>Добавьте расходы слева, чтобы увидеть распределение.</div>":"<div class=\"empty\" style=\"padding:24px 10px;\"><div class=\"display\">The wheel is empty</div>Add expenses on the left to see the breakdown.</div>","<div class=\"wheel-rate-warning\">Не удалось найти курс автоматически — введите вручную:":"<div class=\"wheel-rate-warning\">Couldn't find the rate automatically — enter it manually:","<input type=\"number\" step=\"0.0001\" min=\"0\" placeholder=\"курс\" data-act=\"set-rate\" data-from=\"":"<input type=\"number\" step=\"0.0001\" min=\"0\" placeholder=\"rate\" data-act=\"set-rate\" data-from=\"","<div class=\"wheel-hole\"><div class=\"wheel-total mono\" style=\"font-size:12px;\">0</div><div class=\"mono\" style=\"font-size:10px;color:var(--ink-faint);\">пока нечего делить</div></div>":"<div class=\"wheel-hole\"><div class=\"wheel-total mono\" style=\"font-size:12px;\">0</div><div class=\"mono\" style=\"font-size:10px;color:var(--ink-faint);\">nothing to split yet</div></div>"," <span style=\"color:var(--rose)\">— нужен курс</span>":" <span style=\"color:var(--rose)\">— rate needed</span>","</div><div class=\"mono\" style=\"font-size:10px;color:var(--ink-faint);\">всего</div></div>":"</div><div class=\"mono\" style=\"font-size:10px;color:var(--ink-faint);\">total</div></div>","<div class=\"empty\" style=\"padding:24px 10px;\"><div class=\"display\">Балансов пока нет</div>Добавьте их через виджет «Баланс» слева.</div>":"<div class=\"empty\" style=\"padding:24px 10px;\"><div class=\"display\">No balances yet</div>Add them with the «Balance» widget on the left.</div>","<input type=\"number\" step=\"any\" min=\"0\" placeholder=\"курс\" data-act=\"set-rate\" data-from=\"":"<input type=\"number\" step=\"any\" min=\"0\" placeholder=\"rate\" data-act=\"set-rate\" data-from=\"","осн.":"main","втор.":"sec.","Без пометки":"No label","</div><div class=\"mono\" style=\"font-size:10px;color:var(--ink-faint);\">всего денег</div></div>":"</div><div class=\"mono\" style=\"font-size:10px;color:var(--ink-faint);\">all money</div></div>"," · сегодня":" · today","<div class=\"empty\" style=\"padding:24px 10px;\"><div class=\"display\">Пусто</div>На этот день пока ничего не добавлено.</div>":"<div class=\"empty\" style=\"padding:24px 10px;\"><div class=\"display\">Empty</div>Nothing added for this day yet.</div>","<table class=\"schedule-table\"><thead><tr><th>Начало</th><th>Конец</th><th>Описание</th></tr></thead><tbody>":"<table class=\"schedule-table\"><thead><tr><th>Start</th><th>End</th><th>Description</th></tr></thead><tbody>","<div class=\"sub\" style=\"margin-bottom:10px;\">Выберите день, чтобы увидеть расписание на него</div>":"<div class=\"sub\" style=\"margin-bottom:10px;\">Pick a day to see its schedule</div>","<tr><td colspan=\"4\" class=\"dim\" style=\"font-size:13px;\">Пусто</td></tr>":"<tr><td colspan=\"4\" class=\"dim\" style=\"font-size:13px;\">Empty</td></tr>","<div class=\"empty\" style=\"padding:24px 10px;\"><div class=\"display\">Пусто</div>На этот день пока нет задач.</div>":"<div class=\"empty\" style=\"padding:24px 10px;\"><div class=\"display\">Empty</div>No tasks for this day yet.</div>","<table class=\"schedule-table\"><thead><tr><th></th><th>Начало</th><th>Конец</th><th>Задача</th></tr></thead><tbody>":"<table class=\"schedule-table\"><thead><tr><th></th><th>Start</th><th>End</th><th>Task</th></tr></thead><tbody>","Не выполнено":"Not done","Выполнено":"Done","<div class=\"sub\" style=\"margin-bottom:10px;\">Выберите день этой недели. Отметки «выполнено» сбрасываются каждый понедельник.</div>":"<div class=\"sub\" style=\"margin-bottom:10px;\">Pick a day of this week. «Done» marks reset every Monday.</div>","Изменить курс":"Edit course","Новый курс":"New course","<div class=\"sub\">Добавьте занятие и укажите, по каким дням оно проходит</div>":"<div class=\"sub\">Add a class and choose the days it takes place</div>","<div class=\"field\"><label>Название</label><input type=\"text\" name=\"name\" placeholder=\"Например, английский\" value=\"":"<div class=\"field\"><label>Name</label><input type=\"text\" name=\"name\" placeholder=\"E.g. English\" value=\"","<div class=\"field\"><label>Цвет</label><div class=\"color-picker\">":"<div class=\"field\"><label>Color</label><div class=\"color-picker\">","<div class=\"field\"><label>Дни недели</label><div class=\"day-toggles\">":"<div class=\"field\"><label>Days of the week</label><div class=\"day-toggles\">","<div class=\"field\"><label>Время (необязательно)</label><div class=\"field-row\">":"<div class=\"field\"><label>Time (optional)</label><div class=\"field-row\">","<div class=\"field\"><label>Дата начала</label><input type=\"date\" name=\"startDate\" value=\"":"<div class=\"field\"><label>Start date</label><input type=\"date\" name=\"startDate\" value=\"","<label>Тип оплаты</label>":"<label>Payment type</label>","\" data-plan=\"dynamic\">По урокам</button>":"\" data-plan=\"dynamic\">Per lesson</button>","\" data-plan=\"static\">По абонементу</button>":"\" data-plan=\"static\">Membership</button>","\"><label>Количество уроков</label><input type=\"number\" name=\"total\" min=\"1\" value=\"":"\"><label>Number of lessons</label><input type=\"number\" name=\"total\" min=\"1\" value=\"","\"><label>Оплачено до</label><input type=\"date\" name=\"paidUntil\" value=\"":"\"><label>Paid until</label><input type=\"date\" name=\"paidUntil\" value=\"","\"><div class=\"field-hint\">Вместо счётчика уроков будет показываться, до какого числа оплачен курс.</div></div>":"\"><div class=\"field-hint\">Instead of a lesson counter, it will show the date the course is paid until.</div></div>","Сохранить":"Save","Создать курс":"Create course","Изменить событие":"Edit event","Новое событие":"New event","<div class=\"sub\">Например, день рождения или разовое напоминание</div>":"<div class=\"sub\">E.g. a birthday or a one-time reminder</div>","<div class=\"field\"><label>Название</label><input type=\"text\" name=\"name\" placeholder=\"Например, день рождения Иры\" value=\"":"<div class=\"field\"><label>Name</label><input type=\"text\" name=\"name\" placeholder=\"E.g. Ira's birthday\" value=\"","<div class=\"field\"><label>Дата</label><input type=\"date\" name=\"date\" value=\"":"<div class=\"field\"><label>Date</label><input type=\"date\" name=\"date\" value=\"","<label class=\"switch-label\"><span>Повторять каждый год</span>":"<label class=\"switch-label\"><span>Repeat every year</span>","Добавить событие":"Add event","<div class=\"status warn\">Занятие отменено</div>":"<div class=\"status warn\">Class cancelled</div>","\">Восстановить</button></div>":"\">Restore</button></div>","<div class=\"status\">Перенесено на ":"<div class=\"status\">Moved to ","<div class=\"status ok\">Перенесено сюда с ":"<div class=\"status ok\">Moved here from ","\">Отменить</button></div>":"\">Undo</button></div>","Прошло / засчитано":"Done / counted","Запланировано":"Scheduled","\">Отменить</button>":"\">Undo</button>","\">Перенести</button>":"\">Move</button>","\">ОК</button>":"\">OK</button>","<div class=\"empty\" style=\"padding:20px 6px;\">На этот день ничего не запланировано.</div>":"<div class=\"empty\" style=\"padding:20px 6px;\">Nothing planned for this day.</div>","<div class=\"sub\">Занятия и действия на этот день</div>":"<div class=\"sub\">Classes and actions for this day</div>","<div class=\"status ok\">Повторяется каждый год</div>":"<div class=\"status ok\">Repeats every year</div>","<div class=\"status\">Разовое событие</div>":"<div class=\"status\">One-time event</div>","<div class=\"sub\">События на этот день</div>":"<div class=\"sub\">Events on this day</div>","Изменить доход":"Edit income","Новый доход":"New income","<div class=\"sub\">Зарплата, инвестиции или другой источник дохода</div>":"<div class=\"sub\">Salary, investments or another source of income</div>","<div class=\"field\"><label>Название</label><input type=\"text\" name=\"name\" placeholder=\"Например, зарплата\" value=\"":"<div class=\"field\"><label>Name</label><input type=\"text\" name=\"name\" placeholder=\"E.g. salary\" value=\"","<div class=\"field\" style=\"flex:2;\"><label>Сумма</label><input type=\"number\" name=\"amount\" min=\"0\" step=\"0.01\" placeholder=\"0\" value=\"":"<div class=\"field\" style=\"flex:2;\"><label>Amount</label><input type=\"number\" name=\"amount\" min=\"0\" step=\"0.01\" placeholder=\"0\" value=\"","<label>Периодичность</label>":"<label>Frequency</label>","\" data-schedule=\"once\">Разово</button>":"\" data-schedule=\"once\">Once</button>","\" data-schedule=\"monthly\">Ежемесячно</button>":"\" data-schedule=\"monthly\">Monthly</button>","\"><label>Дата</label><input type=\"date\" name=\"date\" value=\"":"\"><label>Date</label><input type=\"date\" name=\"date\" value=\"","\"><label>Число месяца</label><input type=\"number\" name=\"dayOfMonth\" min=\"1\" max=\"28\" value=\"":"\"><label>Day of month</label><input type=\"number\" name=\"dayOfMonth\" min=\"1\" max=\"28\" value=\"","Добавить доход":"Add income","<input type=\"text\" class=\"sf-name\" placeholder=\"Подкатегория этого расхода\" value=\"":"<input type=\"text\" class=\"sf-name\" placeholder=\"Subcategory of this expense\" value=\"","<input type=\"number\" class=\"sf-amount\" min=\"0\" step=\"0.01\" placeholder=\"Сумма\" value=\"":"<input type=\"number\" class=\"sf-amount\" min=\"0\" step=\"0.01\" placeholder=\"Amount\" value=\"","<button type=\"button\" class=\"icon-btn tiny\" data-remove-sub title=\"Убрать\">✕</button>":"<button type=\"button\" class=\"icon-btn tiny\" data-remove-sub title=\"Remove\">✕</button>","Изменить расход":"Edit expense","Новый расход":"New expense","<div class=\"sub\">Появится как доля на колесе расходов</div>":"<div class=\"sub\">Will appear as a slice of the expense wheel</div>","<div class=\"field\"><label>Название</label><input type=\"text\" name=\"name\" placeholder=\"Например, аренда\" value=\"":"<div class=\"field\"><label>Name</label><input type=\"text\" name=\"name\" placeholder=\"E.g. rent\" value=\"","<div class=\"field\"><label>Бюджет на месяц <span class=\"dim\">(необязательно)</span></label>":"<div class=\"field\"><label>Monthly budget <span class=\"dim\">(optional)</span></label>","<input type=\"number\" name=\"budget\" min=\"0\" step=\"0.01\" placeholder=\"Без лимита\" value=\"":"<input type=\"number\" name=\"budget\" min=\"0\" step=\"0.01\" placeholder=\"No limit\" value=\"","<div class=\"field-hint\">Покажем, сколько потрачено в этом месяце через «+», и предупредим, когда лимит близко.</div></div>":"<div class=\"field-hint\">We'll show how much was spent this month via «+» and warn you when the limit is near.</div></div>","<div class=\"sub-form-head\"><label>Подкатегории <span class=\"dim\">(необязательно)</span></label>":"<div class=\"sub-form-head\"><label>Subcategories <span class=\"dim\">(optional)</span></label>","<button type=\"button\" class=\"btn primary\" id=\"sub-add-btn\" title=\"Добавить подкатегорию\">+ Подкатегория</button></div>":"<button type=\"button\" class=\"btn primary\" id=\"sub-add-btn\" title=\"Add subcategory\">+ Subcategory</button></div>","<div class=\"field-hint\">Разбивка суммы расхода: например, у «Магазина» — хлеб, молоко. Общую сумму они сами не меняют, а кнопка «+» на подкатегории добавляет трату и в неё, и в расход.</div>":"<div class=\"field-hint\">A breakdown of the expense: e.g. bread and milk for «Groceries». They don't change the total by themselves, and the «+» button on a subcategory adds spending to both it and the expense.</div>","Добавить расход":"Add expense","Изменить задачу":"Edit task","Изменить урок":"Edit lesson","Новая задача":"New task","Новый урок":"New lesson","<div class=\"sub\">Сначала добавьте ":"<div class=\"sub\">First add ","саму задачу":"the task itself","сам урок":"the lesson itself"," — дни и время для ":" — days and times for ","неё":"it","него":"it"," можно будет расставить после, кнопкой «+» на карточке</div>":" can be set later with the «+» button on the card</div>","<div class=\"field\"><label>Название</label><input type=\"text\" name=\"name\" placeholder=\"":"<div class=\"field\"><label>Name</label><input type=\"text\" name=\"name\" placeholder=\"","Например, купить продукты":"E.g. buy groceries","Например, математика":"E.g. maths","<div class=\"field\"><label>Описание (необязательно)</label><textarea name=\"notes\" placeholder=\"":"<div class=\"field\"><label>Description (optional)</label><textarea name=\"notes\" placeholder=\"","Детали, ссылки, заметки...":"Details, links, notes...","Кабинет, преподаватель, детали...":"Room, teacher, details...","Добавить":"Add","Изменить время":"Edit time","Добавить время":"Add time","Для задачи":"For the task","Для урока":"For the lesson","» — выберите, когда</div>":"» — choose when</div>","<div class=\"field\"><label>Повтор</label>":"<div class=\"field\"><label>Repeat</label>","\" data-repeat=\"weekly\">Каждую неделю</button>":"\" data-repeat=\"weekly\">Every week</button>","\" data-repeat=\"once\">Один раз</button>":"\" data-repeat=\"once\">Once</button>","\"><label>День недели</label><div class=\"day-toggles\">":"\"><label>Day of the week</label><div class=\"day-toggles\">","\"><label>Дата</label>":"\"><label>Date</label>","<div class=\"field\"><label>Время</label><div class=\"field-row\">":"<div class=\"field\"><label>Time</label><div class=\"field-row\">","\" title=\"Подробнее\">…</button>":"\" title=\"More\">…</button>"," · каждую неделю":" · every week","выполнено":"done","не выполнено":"not done","<div class=\"section-title\" style=\"margin-top:6px;\">Описание</div>":"<div class=\"section-title\" style=\"margin-top:6px;\">Description</div>","<div class=\"dim\" style=\"font-size:14px;\">Описания нет.</div>":"<div class=\"dim\" style=\"font-size:14px;\">No description.</div>","<div class=\"modal-actions\"><button type=\"button\" class=\"btn\" data-act=\"close-modal\">Закрыть</button></div>":"<div class=\"modal-actions\"><button type=\"button\" class=\"btn\" data-act=\"close-modal\">Close</button></div>","<span class=\"tag\">разово</span>":"<span class=\"tag\">once</span>","\">Изменить время</button>":"\">Edit time</button>","\">Удалить</button>":"\">Delete</button>","Задачи на этот день":"Tasks for this day","Расписание на этот день":"Schedule for this day","<div class=\"status ok\">Получено</div>":"<div class=\"status ok\">Received</div>","<div class=\"status warn\">В этот раз не будет</div>":"<div class=\"status warn\">Not coming this time</div>","\">Вернуть</button>":"\">Bring back</button>","<div class=\"status warn\">Ждёт подтверждения</div>":"<div class=\"status warn\">Awaiting confirmation</div>","\">Пришла</button>":"\">Received</button>","Ежемесячная выплата":"Monthly payment","Разовый доход":"One-time income","<div class=\"status\">Перенесено с ":"<div class=\"status\">Moved from ","поступление":"received","пополнение":"top-up","\">Удалить запись</button></div>":"\">Delete entry</button></div>"," · трата</span><span class=\"mono\" style=\"font-size:12px;color:var(--rose);\">-":" · spending</span><span class=\"mono\" style=\"font-size:12px;color:var(--rose);\">-","<div class=\"sub\">Финансы за этот день</div>":"<div class=\"sub\">Finance for this day</div>","\">Изменить</button>":"\">Edit</button>","<div class=\"empty\" style=\"padding:12px 6px;\">Пока нет основных балансов.</div>":"<div class=\"empty\" style=\"padding:12px 6px;\">No main balances yet.</div>","<div class=\"empty\" style=\"padding:12px 6px;\">Пока нет второстепенных балансов.</div>":"<div class=\"empty\" style=\"padding:12px 6px;\">No secondary balances yet.</div>","<h3 class=\"display\">Баланс</h3>":"<h3 class=\"display\">Balance</h3>","<div class=\"sub\">Основные балансы — от 1 до ":"<div class=\"sub\">Main balances — from 1 to "," (например, главная карта). Второстепенные — наличные, копилка и т.д.</div>":" (e.g. your main card). Secondary ones — cash, savings jar, etc.</div>","<div class=\"section-title\">Основные балансы <span class=\"dim\">(":"<div class=\"section-title\">Main balances <span class=\"dim\">(","<div class=\"section-title\">Второстепенные балансы</div>":"<div class=\"section-title\">Secondary balances</div>","<div class=\"field\"><label>Тип баланса</label>":"<div class=\"field\"><label>Balance type</label>","\" data-balkind=\"main\">Основной</button>":"\" data-balkind=\"main\">Main</button>","\" data-balkind=\"secondary\">Второстепенный</button>":"\" data-balkind=\"secondary\">Secondary</button>","<div class=\"field\"><label>Пометка (необязательно)</label><input type=\"text\" name=\"label\" placeholder=\"Например, карта или наличные\" value=\"":"<div class=\"field\"><label>Label (optional)</label><input type=\"text\" name=\"label\" placeholder=\"E.g. card or cash\" value=\"","<button type=\"button\" class=\"btn\" data-act=\"cancel-edit-balance\">Отмена</button>":"<button type=\"button\" class=\"btn\" data-act=\"cancel-edit-balance\">Cancel</button>","<div class=\"field\"><label>Счёт</label><select name=\"balanceId\">":"<div class=\"field\"><label>Account</label><select name=\"balanceId\">","<option value=\"\">Не изменять баланс</option>":"<option value=\"\">Don't change balance</option>","<h3 class=\"display\">Выплата пришла</h3>":"<h3 class=\"display\">Payment received</h3>","» за ":"» for "," (перенесена на ":" (moved to ",". Проверьте сумму — она зачислится на выбранный счёт.</div>":". Check the amount — it will be credited to the selected account.</div>","<div class=\"field\"><label>Сумма (":"<div class=\"field\"><label>Amount (","Нет счёта в валюте ":"No account in "," — выплата отметится, но баланс не изменится. Счёт можно добавить через виджет «Баланс».":" — the payment will be marked, but the balance won't change. You can add an account with the «Balance» widget.","<div class=\"field\"><label>Дата поступления</label><input type=\"date\" name=\"date\" value=\"":"<div class=\"field\"><label>Date received</label><input type=\"date\" name=\"date\" value=\"","<button type=\"submit\" class=\"btn primary\">Зачислить</button>":"<button type=\"submit\" class=\"btn primary\">Credit</button>","<h3 class=\"display\">Перенести выплату</h3>":"<h3 class=\"display\">Move the payment</h3>","» ожидалась ":"» was expected on ",". Выберите новую дату — в этот день приложение снова спросит, пришли ли деньги.</div>":". Pick a new date — on that day the app will ask again whether the money arrived.</div>","<div class=\"field\"><label>Новая дата</label><input type=\"date\" name=\"date\" value=\"":"<div class=\"field\"><label>New date</label><input type=\"date\" name=\"date\" value=\"","<button type=\"button\" class=\"btn danger\" data-act=\"income-skip\">В этот раз не будет</button>":"<button type=\"button\" class=\"btn danger\" data-act=\"income-skip\">Not coming this time</button>","<button type=\"submit\" class=\"btn primary\">Перенести</button>":"<button type=\"submit\" class=\"btn primary\">Move</button>","Сегодня день выплаты":"Payday is today","Ожидалась вчера":"Was expected yesterday","Ожидалась ":"Expected "," — пришла?</div></div></div>":" — did it arrive?</div></div></div>",">Перенести</button>":">Move</button>",">Пришла</button>":">Received</button>","<div class=\"notice\"><div class=\"notice-title\">Подтвердите поступление</div>":"<div class=\"notice\"><div class=\"notice-title\">Confirm the payment</div>","Превышен на <b>":"Exceeded by <b>","<div class=\"budget-top\"><span>В этом месяце ":"<div class=\"budget-top\"><span>This month ","<div class=\"stats-head\"><div class=\"stats-title\">Последние 6 месяцев</div>":"<div class=\"stats-head\"><div class=\"stats-title\">Last 6 months</div>","<div class=\"stats-legend\"><span><i class=\"lg-inc\"></i>Доходы</span><span><i class=\"lg-exp\"></i>Расходы</span></div></div>":"<div class=\"stats-legend\"><span><i class=\"lg-inc\"></i>Income</span><span><i class=\"lg-exp\"></i>Expenses</span></div></div>","<div class=\"empty\" style=\"padding:18px 6px;\">Здесь появится график, когда вы начнёте добавлять суммы через «+» или подтверждать выплаты.</div></div>":"<div class=\"empty\" style=\"padding:18px 6px;\">The chart will appear once you start adding amounts via «+» or confirming payments.</div></div>","%\" title=\"Доходы: ":"%\" title=\"Income: ","%\" title=\"Расходы: ":"%\" title=\"Expenses: ","<div><span>Доходы</span><b class=\"pos\">":"<div><span>Income</span><b class=\"pos\">","<div><span>Расходы</span><b class=\"neg\">":"<div><span>Expenses</span><b class=\"neg\">","<div><span>Итог месяца</span><b>":"<div><span>Month total</span><b>","<div class=\"field-hint\">Учитываются операции с датой: суммы через «+», подтверждённые выплаты и оплаты курсов. Сумму, вписанную в карточку вручную, график не видит.</div>":"<div class=\"field-hint\">Only dated operations count: amounts added via «+», confirmed payments and course payments. The chart doesn't see an amount typed into the card by hand.</div>","<div class=\"field-hint\">Без курса не учтены: ":"<div class=\"field-hint\">Not counted without a rate: ",". Добавьте курс в «Курсы валют».</div>":". Add the rate in «Exchange rates».</div>","доходу":"income","расходу":"expense","прибавится к выбранному счёту":"will be added to the selected account","спишется с выбранного счёта":"will be taken from the selected account","<div class=\"field-hint\" style=\"margin-bottom:14px;\">Нет счёта в валюте ":"<div class=\"field-hint\" style=\"margin-bottom:14px;\">No account in "," — сумма добавится к карточке, но баланс не изменится. Можно добавить счёт через «Баланс» в меню.</div>":" — the amount will be added to the card, but the balance won't change. You can add an account via «Balance» in the menu.</div>","<h3 class=\"display\">Добавить сумму</h3>":"<h3 class=\"display\">Add amount</h3>","К подкатегории «":"To subcategory «","» (расход «":"» (expense «","»), сейчас ":"»), now ",". Сумма ":". The amount "," и добавится к общей сумме расхода.":" and will be added to the expense total.","К «":"To «","), сейчас ":"), now ","<div class=\"field\"><label>Дата траты</label><input type=\"date\" name=\"date\" value=\"":"<div class=\"field\"><label>Date spent</label><input type=\"date\" name=\"date\" value=\"","<button type=\"submit\" class=\"btn primary\">Добавить</button>":"<button type=\"submit\" class=\"btn primary\">Add</button>","<div class=\"empty\" style=\"padding:16px 6px;\">Пока нет сохранённых курсов.</div>":"<div class=\"empty\" style=\"padding:16px 6px;\">No saved rates yet.</div>","<h3 class=\"display\">Курсы валют</h3>":"<h3 class=\"display\">Exchange rates</h3>","<div class=\"sub\">Сохранённые курсы конвертации для колеса расходов</div>":"<div class=\"sub\">Saved conversion rates for the expense wheel</div>","<div class=\"field\" style=\"flex:1;\"><label>Из</label><select name=\"from\">":"<div class=\"field\" style=\"flex:1;\"><label>From</label><select name=\"from\">","<div class=\"field\" style=\"flex:1;\"><label>В</label><select name=\"to\">":"<div class=\"field\" style=\"flex:1;\"><label>To</label><select name=\"to\">","<div class=\"field\"><label>Курс (1 «Из» = ? «В»)</label><input type=\"number\" step=\"any\" min=\"0\" name=\"value\" value=\"":"<div class=\"field\"><label>Rate (1 «From» = ? «To»)</label><input type=\"number\" step=\"any\" min=\"0\" name=\"value\" value=\"","<button type=\"button\" class=\"btn\" data-act=\"cancel-edit-rate\">Отмена</button>":"<button type=\"button\" class=\"btn\" data-act=\"cancel-edit-rate\">Cancel</button>","Добавить курс":"Add rate","<div class=\"empty\" style=\"padding:16px 6px;\">Пока нет ни одной транзакции.</div>":"<div class=\"empty\" style=\"padding:16px 6px;\">No transactions yet.</div>","<h3 class=\"display\">История транзакций</h3>":"<h3 class=\"display\">Transaction history</h3>","<div class=\"sub\">Все пополнения и траты по карточкам этой доски, от новых к старым</div>":"<div class=\"sub\">All top-ups and spending on this board's cards, newest first</div>","\" title=\"Переименовать\">":"\" title=\"Rename\">","\" title=\"Клонировать\">":"\" title=\"Clone\">","\" title=\"Удалить доску\">":"\" title=\"Delete board\">","<h3 class=\"display\">Доски</h3>":"<h3 class=\"display\">Boards</h3>","<div class=\"sub\">Переключайтесь между календарями или создайте новый</div>":"<div class=\"sub\">Switch between calendars or create a new one</div>","<label>Новая доска</label>":"<label>New board</label>","<span>Выбрать тип доски: ":"<span>Choose board type: ","<div class=\"field-row\" style=\"margin-top:10px;\"><input type=\"text\" id=\"new-board-name\" placeholder=\"Название доски\"><button class=\"btn primary\" data-act=\"create-board\">+</button></div>":"<div class=\"field-row\" style=\"margin-top:10px;\"><input type=\"text\" id=\"new-board-name\" placeholder=\"Board name\"><button class=\"btn primary\" data-act=\"create-board\">+</button></div>","<button type=\"button\" class=\"btn\" style=\"width:100%;\" data-act=\"open-settings\">⚙ Настройки</button>":"<button type=\"button\" class=\"btn\" style=\"width:100%;\" data-act=\"open-settings\">⚙ Settings</button>","Удалить?":"Delete?","Удалить курс?":"Delete course?","Удалить событие?":"Delete event?","Удалить доход?":"Delete income?"," История транзакций карточки тоже удалится, баланс при этом не изменится.":" The card's transaction history will be deleted too; the balance won't change.","Удалить расход?":"Delete expense?","Удалить задачу?":"Delete task?","Удалить урок?":"Delete lesson?","<div class=\"sub\">Вы точно хотите удалить «":"<div class=\"sub\">Are you sure you want to delete «","»? Это действие нельзя отменить.":"»? This can't be undone.","<button type=\"button\" class=\"btn\" data-act=\"cancel-dialog\">Нет</button>":"<button type=\"button\" class=\"btn\" data-act=\"cancel-dialog\">No</button>","<button type=\"button\" class=\"btn danger\" data-act=\"confirm-delete-card\">Да</button>":"<button type=\"button\" class=\"btn danger\" data-act=\"confirm-delete-card\">Yes</button>","<h3 class=\"display\">Удалить доску?</h3>":"<h3 class=\"display\">Delete board?</h3>","<div class=\"sub\">Вы точно хотите удалить эту доску? «":"<div class=\"sub\">Are you sure you want to delete this board? «","» и все её данные будут удалены без возможности восстановления.</div>":"» and all its data will be deleted permanently.</div>","<button type=\"button\" class=\"btn danger\" data-act=\"confirm-delete-board\">Да</button>":"<button type=\"button\" class=\"btn danger\" data-act=\"confirm-delete-board\">Yes</button>","<h3 class=\"display\">Название доски</h3>":"<h3 class=\"display\">Board name</h3>","<div class=\"sub\">Введите новое название</div>":"<div class=\"sub\">Enter a new name</div>","<button type=\"submit\" class=\"btn primary\">Сохранить</button>":"<button type=\"submit\" class=\"btn primary\">Save</button>","<h3 class=\"display\">Настройки</h3>":"<h3 class=\"display\">Settings</h3>","<div class=\"sub\">Оформление, язык, сводка и резервные копии</div>":"<div class=\"sub\">Appearance, language, summary and backups</div>","<label>Тема</label>":"<label>Theme</label>","\" data-act=\"set-theme\" data-theme=\"dark\">Тёмная</button>":"\" data-act=\"set-theme\" data-theme=\"dark\">Dark</button>","\" data-act=\"set-theme\" data-theme=\"light\">Светлая</button>":"\" data-act=\"set-theme\" data-theme=\"light\">Light</button>","\" data-act=\"set-theme\" data-theme=\"auto\">Как в системе</button>":"\" data-act=\"set-theme\" data-theme=\"auto\">System</button>","<label class=\"switch-label\"><span>Показывать сводку дня при запуске</span>":"<label class=\"switch-label\"><span>Show the daily summary on launch</span>","<label>Резервная копия</label>":"<label>Backup</label>","<button type=\"button\" class=\"btn primary\" style=\"width:100%;\" data-act=\"download-backup\">⬇ Скачать копию всех досок</button>":"<button type=\"button\" class=\"btn primary\" style=\"width:100%;\" data-act=\"download-backup\">⬇ Download a backup of all boards</button>","<div class=\"field-hint\">Сохраните файл в надёжное место — если браузер очистит данные, из него можно всё восстановить.</div>":"<div class=\"field-hint\">Keep the file somewhere safe — if the browser clears its data, you can restore everything from it.</div>","<label>Поделиться текущей доской</label>":"<label>Share the current board</label>","<button type=\"button\" class=\"btn\" style=\"width:100%;\" data-act=\"download-board\">⬇ Скачать файл доски</button>":"<button type=\"button\" class=\"btn\" style=\"width:100%;\" data-act=\"download-board\">⬇ Download board file</button>","<div class=\"field-hint\">Отправьте файл как обычно (мессенджер, почта) — размер доски тут не важен.</div>":"<div class=\"field-hint\">Send the file as usual (messenger, email) — the board size doesn't matter.</div>","<label>Загрузить доску или копию из файла</label>":"<label>Load a board or backup from a file</label>","<button type=\"button\" class=\"btn primary\" data-act=\"pick-board-file\">Выбрать файл</button>":"<button type=\"button\" class=\"btn primary\" data-act=\"pick-board-file\">Choose file</button>","<div class=\"field-hint\" style=\"margin-top:10px;\">или перетащите файл сюда</div>":"<div class=\"field-hint\" style=\"margin-top:10px;\">or drag the file here</div>","Введите название":"Enter a name","Выберите хотя бы один день недели":"Select at least one day of the week","Неверное время — введите, например, 14:30":"Invalid time — enter e.g. 14:30","Без названия":"Untitled","Укажите дату, до которой оплачено":"Enter the paid-until date","Укажите дату":"Enter a date","Укажите сумму":"Enter an amount","Основных балансов может быть не больше ":"There can be at most this many main balances: ","Добавлено, но счёт не найден — баланс не изменён.":"Added, but the account wasn't found — balance unchanged.","<option value=\"new\">+ Новая категория «":"<option value=\"new\">+ New category «","<option value=\"\">Не списывать со счёта</option>":"<option value=\"\">Don't take from an account</option>","Укажите количество уроков":"Enter the number of lessons","Укажите курс":"Enter a rate","Валюты должны различаться":"Currencies must differ","Время удалено":"Time deleted","Запись удалена":"Entry deleted","Баланс удалён":"Balance deleted","Доска удалена":"Board deleted","Оплата удалена":"Payment deleted","Отмечено: в этот раз выплаты не будет":"Marked: no payment this time","<button class=\"icon-btn\" data-act=\"prev-month\" aria-label=\"Предыдущий месяц\">‹</button>":"<button class=\"icon-btn\" data-act=\"prev-month\" aria-label=\"Previous month\">‹</button>","<button class=\"icon-btn\" data-act=\"next-month\" aria-label=\"Следующий месяц\">›</button>":"<button class=\"icon-btn\" data-act=\"next-month\" aria-label=\"Next month\">›</button>","Календарь занятий":"Lesson calendar","Язык":"Language","После смены языка страница перезагрузится.":"The page will reload after you change the language.","Как в системе":"System"},
-    uk: {"Пн":"Пн","Вт":"Вт","Ср":"Ср","Чт":"Чт","Пт":"Пт","Сб":"Сб","Вс":"Нд","января":"січня","февраля":"лютого","марта":"березня","апреля":"квітня","мая":"травня","июня":"червня","июля":"липня","августа":"серпня","сентября":"вересня","октября":"жовтня","ноября":"листопада","декабря":"грудня","<input type=\"text\" class=\"tp-h\" inputmode=\"numeric\" autocomplete=\"off\" maxlength=\"2\" placeholder=\"чч\" aria-label=\"Часы\" value=\"":"<input type=\"text\" class=\"tp-h\" inputmode=\"numeric\" autocomplete=\"off\" maxlength=\"2\" placeholder=\"гг\" aria-label=\"Години\" value=\"","<input type=\"text\" class=\"tp-m\" inputmode=\"numeric\" autocomplete=\"off\" maxlength=\"2\" placeholder=\"мм\" aria-label=\"Минуты\" value=\"":"<input type=\"text\" class=\"tp-m\" inputmode=\"numeric\" autocomplete=\"off\" maxlength=\"2\" placeholder=\"хх\" aria-label=\"Хвилини\" value=\"","<div class=\"field-hint\">Начало — конец. Напишите часы, и курсор сам перейдёт к минутам.</div>":"<div class=\"field-hint\">Початок — кінець. Напишіть години, і курсор сам перейде до хвилин.</div>","Январь":"Січень","Февраль":"Лютий","Март":"Березень","Апрель":"Квітень","Май":"Травень","Июнь":"Червень","Июль":"Липень","Август":"Серпень","Сентябрь":"Вересень","Октябрь":"Жовтень","Ноябрь":"Листопад","Декабрь":"Грудень","янв":"січ","фев":"лют","мар":"бер","апр":"кві","май":"тра","июн":"чер","июл":"лип","авг":"сер","сен":"вер","окт":"жов","ноя":"лис","дек":"гру","понедельник":"понеділок","вторник":"вівторок","среда":"середа","четверг":"четвер","пятница":"пʼятниця","суббота":"субота","воскресенье":"неділя","Занятия":"Заняття","События":"Події","Финансы":"Фінанси","Расписание":"Розклад","Планер задач":"Планер задач","Автообновление курсов недоступно в этом браузере":"Автооновлення курсів недоступне в цьому браузері","Нет интернета — курсы валют можно обновить только онлайн":"Немає інтернету — курси валют можна оновити лише онлайн","Обновляем курсы…":"Оновлюємо курси…","Не удалось получить курсы":"Не вдалося отримати курси","Курсы обновлены":"Курси оновлено","Курсы не изменились":"Курси не змінилися","Не удалось получить курсы — проверьте подключение к интернету":"Не вдалося отримати курси — перевірте підключення до інтернету","Мой календарь":"Мій календар","Отменить":"Скасувати","Восстановлено":"Відновлено","Доски заменены копией":"Дошки замінено копією","Доски из копии добавлены":"Дошки з копії додано","Копия всех досок сохранена":"Копію всіх дошок збережено","Доска добавлена":"Дошку додано","Не удалось прочитать файл — это не файл доски или копии":"Не вдалося прочитати файл — це не файл дошки чи копії","Не удалось прочитать файл":"Не вдалося прочитати файл","Новая доска":"Нова дошка","Название изменено":"Назву змінено"," (копия)":" (копія)","Доска клонирована":"Дошку клоновано","Нельзя удалить последнюю доску":"Не можна видалити останню дошку","оплата курса":"оплата курсу"," · расход записан в «":" · витрату записано в «","Курс «":"Курс «","» продлён":"» продовжено","абонемент закончился ":"абонемент закінчився ","абонемент заканчивается сегодня":"абонемент закінчується сьогодні","абонемент закончится через ":"абонемент закінчиться через ","день":"день","дня":"дні","дней":"днів","уроки закончились, сверх оплаты: ":"уроки закінчилися, понад оплату: ","оплаченные уроки закончились":"оплачені уроки закінчилися","остался ":"залишився ","осталось ":"залишилося ","урок":"урок","урока":"уроки","уроков":"уроків","</b><div class=\"notice-sub\">Пора оплатить: ":"</b><div class=\"notice-sub\">Час оплатити: ",">Продлить</button></div>":">Продовжити</button></div>","<div class=\"notice warn\"><div class=\"notice-title\">Напоминание об оплате</div>":"<div class=\"notice warn\"><div class=\"notice-title\">Нагадування про оплату</div>","<div class=\"fin-box\"><div class=\"fin-title\">Записать в расходы</div><div class=\"field-hint\" style=\"margin:0;\">Создайте доску «Финансы» — тогда оплаты курсов будут сразу попадать в расходы.</div></div>":"<div class=\"fin-box\"><div class=\"fin-title\">Записати у витрати</div><div class=\"field-hint\" style=\"margin:0;\">Створіть дошку «Фінанси» — тоді оплати курсів одразу потраплятимуть у витрати.</div></div>","<div class=\"fin-title\">Записать в расходы</div>":"<div class=\"fin-title\">Записати у витрати</div>","<div class=\"field\"><label>Доска</label><select name=\"finBoard\">":"<div class=\"field\"><label>Дошка</label><select name=\"finBoard\">","<option value=\"\">Не записывать</option>":"<option value=\"\">Не записувати</option>","<div class=\"field\" data-fin-dep><label>Категория расхода</label><select name=\"finExpense\"></select></div>":"<div class=\"field\" data-fin-dep><label>Категорія витрат</label><select name=\"finExpense\"></select></div>","<div class=\"field\" data-fin-dep><label>Списать со счёта</label><select name=\"finBalance\"></select></div>":"<div class=\"field\" data-fin-dep><label>Списати з рахунку</label><select name=\"finBalance\"></select></div>","<div class=\"field-hint\" data-fin-dep style=\"margin-top:-6px;\">Расход запишется, только если указана сумма оплаты. Категории показаны в выбранной валюте.</div>":"<div class=\"field-hint\" data-fin-dep style=\"margin-top:-6px;\">Витрата запишеться, лише якщо вказано суму оплати. Категорії показано у вибраній валюті.</div>","<div class=\"field\"><label>Оплачено до</label><input type=\"date\" name=\"until\" value=\"":"<div class=\"field\"><label>Оплачено до</label><input type=\"date\" name=\"until\" value=\"","<div class=\"field-hint\">Сейчас: ":"<div class=\"field-hint\">Зараз: ","до ":"до ","дата не указана":"дату не вказано","<div class=\"field\"><label>Сколько уроков добавить</label><input type=\"number\" name=\"lessons\" min=\"1\" step=\"1\" value=\"":"<div class=\"field\"><label>Скільки уроків додати</label><input type=\"number\" name=\"lessons\" min=\"1\" step=\"1\" value=\"","<div class=\"field-hint\">Сейчас осталось ":"<div class=\"field-hint\">Зараз залишилося "," из ":" з ","продление":"продовження","<span class=\"dim\">без суммы</span>":"<span class=\"dim\">без суми</span>","\">Удалить</button></div>":"\">Видалити</button></div>","<h3 class=\"display\">Продлить «":"<h3 class=\"display\">Продовжити «","Укажите новую дату окончания абонемента":"Вкажіть нову дату закінчення абонемента","Добавьте оплаченные уроки":"Додайте оплачені уроки"," и, если хотите, сумму — она попадёт в историю оплат.</div>":" і, за бажанням, суму — вона потрапить в історію оплат.</div>","<div class=\"field\" style=\"flex:2;\"><label>Сумма <span class=\"dim\">(необязательно)</span></label><input type=\"number\" name=\"amount\" min=\"0\" step=\"0.01\" placeholder=\"0\"></div>":"<div class=\"field\" style=\"flex:2;\"><label>Сума <span class=\"dim\">(необовʼязково)</span></label><input type=\"number\" name=\"amount\" min=\"0\" step=\"0.01\" placeholder=\"0\"></div>","<div class=\"field\" style=\"flex:1;\"><label>Валюта</label><select name=\"currency\">":"<div class=\"field\" style=\"flex:1;\"><label>Валюта</label><select name=\"currency\">","<div class=\"field\" style=\"margin-top:16px;\"><label>Дата оплаты</label><input type=\"date\" name=\"date\" value=\"":"<div class=\"field\" style=\"margin-top:16px;\"><label>Дата оплати</label><input type=\"date\" name=\"date\" value=\"","<button type=\"button\" class=\"btn\" data-act=\"close-modal\">Отмена</button>":"<button type=\"button\" class=\"btn\" data-act=\"close-modal\">Скасувати</button>","<button type=\"submit\" class=\"btn primary\">Продлить</button>":"<button type=\"submit\" class=\"btn primary\">Продовжити</button>","<div class=\"section-title\">История оплат":"<div class=\"section-title\">Історія оплат"," <span class=\"dim\">· всего ":" <span class=\"dim\">· усього ","<div class=\"empty\" style=\"padding:12px 6px;\">Оплат пока нет.</div>":"<div class=\"empty\" style=\"padding:12px 6px;\">Оплат поки немає.</div>","весь день":"весь день","прошло":"минуло","впереди":"попереду","сегодня":"сьогодні","через ":"через ","бюджет":"бюджет","превышен":"перевищено","\">Открыть</button>":"\">Відкрити</button>","<div class=\"sub\">Всё важное на сегодня со всех досок</div>":"<div class=\"sub\">Усе важливе на сьогодні з усіх дошок</div>","<div class=\"empty\" style=\"padding:26px 6px;\"><div class=\"display\">Свободный день</div>На сегодня ничего не запланировано.</div>":"<div class=\"empty\" style=\"padding:26px 6px;\"><div class=\"display\">Вільний день</div>На сьогодні нічого не заплановано.</div>","<h3 class=\"display\">Восстановить копию?</h3>":"<h3 class=\"display\">Відновити копію?</h3>","<div class=\"sub\">В файле ":"<div class=\"sub\">У файлі ","доска":"дошка","доски":"дошки","досок":"дошок",". Можно добавить их к текущим или заменить все текущие доски.</div>":". Можна додати їх до поточних або замінити всі поточні дошки.</div>","<button type=\"button\" class=\"btn primary\" data-act=\"backup-add\">Добавить к текущим</button>":"<button type=\"button\" class=\"btn primary\" data-act=\"backup-add\">Додати до поточних</button>","<button type=\"button\" class=\"btn danger\" data-act=\"backup-replace\">Заменить все</button>":"<button type=\"button\" class=\"btn danger\" data-act=\"backup-replace\">Замінити всі</button>","<button type=\"button\" class=\"btn\" data-act=\"cancel-dialog\">Отмена</button>":"<button type=\"button\" class=\"btn\" data-act=\"cancel-dialog\">Скасувати</button>","начальная сумма":"початкова сума","Курс удалён":"Курс видалено","Событие удалено":"Подію видалено","Доход удалён":"Дохід видалено","Расход удалён":"Витрату видалено","Задача удалена":"Задачу видалено","Урок удалён":"Урок видалено","Удалено":"Видалено","Зачислено на «":"Зараховано на «","счёт":"рахунок","Выплата отмечена":"Виплату відмічено","Перенесено на ":"Перенесено на ","<input type=\"search\" id=\"card-search\" placeholder=\"Поиск по названию\" autocomplete=\"off\" value=\"":"<input type=\"search\" id=\"card-search\" placeholder=\"Пошук за назвою\" autocomplete=\"off\" value=\"","<div class=\"display\">Ничего не найдено</div>Попробуйте другой запрос.":"<div class=\"display\">Нічого не знайдено</div>Спробуйте інший запит.","события":"події","финансы":"фінанси","расписание":"розклад","задачи":"задачі","занятия":"заняття","<div class=\"storage-warn\">Локальное хранилище браузера недоступно (например, приватный режим) — изменения не сохранятся.</div>":"<div class=\"storage-warn\">Сховище браузера недоступне (наприклад, приватний режим) — зміни не збережуться.</div>","\" data-act=\"finance-view\" data-view=\"income\">Доходы</button>":"\" data-act=\"finance-view\" data-view=\"income\">Доходи</button>","\" data-act=\"finance-view\" data-view=\"expenses\">Расходы</button>":"\" data-act=\"finance-view\" data-view=\"expenses\">Витрати</button>","<button class=\"icon-btn\" data-act=\"open-menu\" title=\"Доски\">☰</button>":"<button class=\"icon-btn\" data-act=\"open-menu\" title=\"Дошки\">☰</button>","<div><h1 class=\"display\">Календарь<span>Доска: <b>":"<div><h1 class=\"display\">Календар<span>Дошка: <b>","<button class=\"btn small\" data-act=\"today\">Сегодня</button>":"<button class=\"btn small\" data-act=\"today\">Сьогодні</button>","<button class=\"btn small\" data-act=\"open-summary\">Сводка</button>":"<button class=\"btn small\" data-act=\"open-summary\">Зведення</button>","<h2>Курсы</h2>":"<h2>Курси</h2>","<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Пока пусто</div>Добавьте первый курс, чтобы начать отсчёт уроков.</div>":"<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Поки порожньо</div>Додайте перший курс, щоб почати відлік уроків.</div>"," · с ":" · з ","<span class=\"dim\">Дата окончания не указана</span>":"<span class=\"dim\">Дату закінчення не вказано</span>","<span class=\"warn\">Абонемент истёк ":"<span class=\"warn\">Абонемент закінчився ","<span class=\"warn\">Осталось ":"<span class=\"warn\">Залишилось "," дн. (до ":" дн. (до ","Оплачено до <b>":"Оплачено до <b>","Абонемент до <span class=\"pc-total-edit\"><input type=\"date\" class=\"mono\" data-act=\"edit-paiduntil\" data-id=\"":"Абонемент до <span class=\"pc-total-edit\"><input type=\"date\" class=\"mono\" data-act=\"edit-paiduntil\" data-id=\"","<span class=\"warn\">Превышение на ":"<span class=\"warn\">Перевищення на "," — увеличьте количество уроков</span>":" — збільште кількість уроків</span>","<span class=\"warn\">Уроки закончились</span>":"<span class=\"warn\">Уроки закінчилися</span>","Хватит до <b>":"Вистачить до <b>","<span class=\"dim\">хватит более чем на 3 года вперёд</span>":"<span class=\"dim\">вистачить більш ніж на 3 роки вперед</span>","Осталось <b>":"Залишилось <b>","</b> из ":"</b> з ","\" title=\"Продлить и история оплат\" style=\"width:26px;height:26px;font-size:13px;\">↻</button>":"\" title=\"Продовжити та історія оплат\" style=\"width:26px;height:26px;font-size:13px;\">↻</button>","\" title=\"Изменить\" style=\"width:26px;height:26px;font-size:12px;\">✎</button>":"\" title=\"Змінити\" style=\"width:26px;height:26px;font-size:12px;\">✎</button>","\" title=\"Удалить\" style=\"width:26px;height:26px;font-size:13px;\">✕</button>":"\" title=\"Видалити\" style=\"width:26px;height:26px;font-size:13px;\">✕</button>","<div class=\"pc-paid\">Оплачено всего: <b>":"<div class=\"pc-paid\">Оплачено всього: <b>","<button class=\"add-card\" data-act=\"open-add\">+ Добавить курс</button>":"<button class=\"add-card\" data-act=\"open-add\">+ Додати курс</button>","<div class=\"sidebar\"><h2>События</h2>":"<div class=\"sidebar\"><h2>Події</h2>","<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Пока пусто</div>Добавьте первое событие — например, день рождения.</div>":"<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Поки порожньо</div>Додайте першу подію — наприклад, день народження.</div>","Ежегодно · ":"Щороку · ","<b style=\"color:var(--today)\">Сегодня!</b>":"<b style=\"color:var(--today)\">Сьогодні!</b>"," дн.":" дн.","<span class=\"dim\">прошло</span>":"<span class=\"dim\">минуло</span>","<button class=\"add-card\" data-act=\"open-add\">+ Добавить событие</button>":"<button class=\"add-card\" data-act=\"open-add\">+ Додати подію</button>","Задачи":"Задачі","<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Пока пусто</div>":"<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Поки порожньо</div>","Сначала добавьте задачу, а потом расставьте дни и время для неё.":"Спочатку додайте задачу, а потім розставте дні та час для неї.","Сначала добавьте урок, а потом расставьте дни и время для него.":"Спочатку додайте урок, а потім розставте дні та час для нього.","<div class=\"dim\" style=\"font-size:12px;\">Дни и время ещё не заданы</div>":"<div class=\"dim\" style=\"font-size:12px;\">Дні та час ще не задано</div>"," <span class=\"tag\">разово</span>":" <span class=\"tag\">разово</span>","\" title=\"Изменить\">✎</button>":"\" title=\"Змінити\">✎</button>","\" title=\"Удалить\">✕</button>":"\" title=\"Видалити\">✕</button>","\" title=\"Добавить день и время\" style=\"width:26px;height:26px;font-size:14px;\">+</button>":"\" title=\"Додати день і час\" style=\"width:26px;height:26px;font-size:14px;\">+</button>","Добавить задачу":"Додати задачу","Добавить урок":"Додати урок","Основной":"Основний","Добавить баланс":"Додати баланс","<div class=\"balance-widget-label\">Баланс</div>":"<div class=\"balance-widget-label\">Баланс</div>","<h2>Доходы</h2>":"<h2>Доходи</h2>","<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Пока пусто</div>Добавьте зарплату, инвестиции или другой источник дохода.</div>":"<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Поки порожньо</div>Додайте зарплату, інвестиції чи інше джерело доходу.</div>","Ежемесячно · ":"Щомісяця · "," числа":" числа","Разово · ":"Разово · ","\" title=\"Добавить сумму\" style=\"width:26px;height:26px;font-size:14px;\">+</button>":"\" title=\"Додати суму\" style=\"width:26px;height:26px;font-size:14px;\">+</button>","<button class=\"add-card\" data-act=\"open-add\">+ Добавить доход</button>":"<button class=\"add-card\" data-act=\"open-add\">+ Додати дохід</button>","Остальное: <b>":"Решта: <b>","<span class=\"warn\">Подкатегории больше суммы на ":"<span class=\"warn\">Підкатегорії більші за суму на ","<h2>Расходы</h2>":"<h2>Витрати</h2>","<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Пока пусто</div>Добавьте статьи расходов, чтобы увидеть их на колесе.</div>":"<div class=\"empty\" style=\"padding:20px 6px;\"><div class=\"display\">Поки порожньо</div>Додайте статті витрат, щоб побачити їх на колесі.</div>","% от расходов в ":"% від витрат у ","<button class=\"add-card\" data-act=\"open-add\">+ Добавить расход</button>":"<button class=\"add-card\" data-act=\"open-add\">+ Додати витрату</button>"," · не будет":" · не буде"," · ждёт подтверждения":" · чекає підтвердження"," · получено":" · отримано","<label class=\"mono\">Колесо в:</label>":"<label class=\"mono\">Колесо в:</label>","\">Обновить курсы</button>":"\">Оновити курси</button>","<button type=\"button\" class=\"btn small\" data-act=\"open-rates\">Курсы валют</button>":"<button type=\"button\" class=\"btn small\" data-act=\"open-rates\">Курси валют</button>","<button type=\"button\" class=\"btn small\" data-act=\"open-history\">История транзакций</button>":"<button type=\"button\" class=\"btn small\" data-act=\"open-history\">Історія транзакцій</button>","<div class=\"empty\" style=\"padding:24px 10px;\"><div class=\"display\">Колесо пусто</div>Добавьте расходы слева, чтобы увидеть распределение.</div>":"<div class=\"empty\" style=\"padding:24px 10px;\"><div class=\"display\">Колесо порожнє</div>Додайте витрати ліворуч, щоб побачити розподіл.</div>","<div class=\"wheel-rate-warning\">Не удалось найти курс автоматически — введите вручную:":"<div class=\"wheel-rate-warning\">Не вдалося знайти курс автоматично — введіть вручну:","<input type=\"number\" step=\"0.0001\" min=\"0\" placeholder=\"курс\" data-act=\"set-rate\" data-from=\"":"<input type=\"number\" step=\"0.0001\" min=\"0\" placeholder=\"курс\" data-act=\"set-rate\" data-from=\"","<div class=\"wheel-hole\"><div class=\"wheel-total mono\" style=\"font-size:12px;\">0</div><div class=\"mono\" style=\"font-size:10px;color:var(--ink-faint);\">пока нечего делить</div></div>":"<div class=\"wheel-hole\"><div class=\"wheel-total mono\" style=\"font-size:12px;\">0</div><div class=\"mono\" style=\"font-size:10px;color:var(--ink-faint);\">поки нічого ділити</div></div>"," <span style=\"color:var(--rose)\">— нужен курс</span>":" <span style=\"color:var(--rose)\">— потрібен курс</span>","</div><div class=\"mono\" style=\"font-size:10px;color:var(--ink-faint);\">всего</div></div>":"</div><div class=\"mono\" style=\"font-size:10px;color:var(--ink-faint);\">усього</div></div>","<div class=\"empty\" style=\"padding:24px 10px;\"><div class=\"display\">Балансов пока нет</div>Добавьте их через виджет «Баланс» слева.</div>":"<div class=\"empty\" style=\"padding:24px 10px;\"><div class=\"display\">Балансів поки немає</div>Додайте їх через віджет «Баланс» ліворуч.</div>","<input type=\"number\" step=\"any\" min=\"0\" placeholder=\"курс\" data-act=\"set-rate\" data-from=\"":"<input type=\"number\" step=\"any\" min=\"0\" placeholder=\"курс\" data-act=\"set-rate\" data-from=\"","осн.":"осн.","втор.":"друг.","Без пометки":"Без позначки","</div><div class=\"mono\" style=\"font-size:10px;color:var(--ink-faint);\">всего денег</div></div>":"</div><div class=\"mono\" style=\"font-size:10px;color:var(--ink-faint);\">усього грошей</div></div>"," · сегодня":" · сьогодні","<div class=\"empty\" style=\"padding:24px 10px;\"><div class=\"display\">Пусто</div>На этот день пока ничего не добавлено.</div>":"<div class=\"empty\" style=\"padding:24px 10px;\"><div class=\"display\">Порожньо</div>На цей день поки нічого не додано.</div>","<table class=\"schedule-table\"><thead><tr><th>Начало</th><th>Конец</th><th>Описание</th></tr></thead><tbody>":"<table class=\"schedule-table\"><thead><tr><th>Початок</th><th>Кінець</th><th>Опис</th></tr></thead><tbody>","<div class=\"sub\" style=\"margin-bottom:10px;\">Выберите день, чтобы увидеть расписание на него</div>":"<div class=\"sub\" style=\"margin-bottom:10px;\">Виберіть день, щоб побачити розклад на нього</div>","<tr><td colspan=\"4\" class=\"dim\" style=\"font-size:13px;\">Пусто</td></tr>":"<tr><td colspan=\"4\" class=\"dim\" style=\"font-size:13px;\">Порожньо</td></tr>","<div class=\"empty\" style=\"padding:24px 10px;\"><div class=\"display\">Пусто</div>На этот день пока нет задач.</div>":"<div class=\"empty\" style=\"padding:24px 10px;\"><div class=\"display\">Порожньо</div>На цей день поки немає задач.</div>","<table class=\"schedule-table\"><thead><tr><th></th><th>Начало</th><th>Конец</th><th>Задача</th></tr></thead><tbody>":"<table class=\"schedule-table\"><thead><tr><th></th><th>Початок</th><th>Кінець</th><th>Задача</th></tr></thead><tbody>","Не выполнено":"Не виконано","Выполнено":"Виконано","<div class=\"sub\" style=\"margin-bottom:10px;\">Выберите день этой недели. Отметки «выполнено» сбрасываются каждый понедельник.</div>":"<div class=\"sub\" style=\"margin-bottom:10px;\">Виберіть день цього тижня. Позначки «виконано» скидаються щопонеділка.</div>","Изменить курс":"Змінити курс","Новый курс":"Новий курс","<div class=\"sub\">Добавьте занятие и укажите, по каким дням оно проходит</div>":"<div class=\"sub\">Додайте заняття та вкажіть, у які дні воно проходить</div>","<div class=\"field\"><label>Название</label><input type=\"text\" name=\"name\" placeholder=\"Например, английский\" value=\"":"<div class=\"field\"><label>Назва</label><input type=\"text\" name=\"name\" placeholder=\"Наприклад, англійська\" value=\"","<div class=\"field\"><label>Цвет</label><div class=\"color-picker\">":"<div class=\"field\"><label>Колір</label><div class=\"color-picker\">","<div class=\"field\"><label>Дни недели</label><div class=\"day-toggles\">":"<div class=\"field\"><label>Дні тижня</label><div class=\"day-toggles\">","<div class=\"field\"><label>Время (необязательно)</label><div class=\"field-row\">":"<div class=\"field\"><label>Час (необовʼязково)</label><div class=\"field-row\">","<div class=\"field\"><label>Дата начала</label><input type=\"date\" name=\"startDate\" value=\"":"<div class=\"field\"><label>Дата початку</label><input type=\"date\" name=\"startDate\" value=\"","<label>Тип оплаты</label>":"<label>Тип оплати</label>","\" data-plan=\"dynamic\">По урокам</button>":"\" data-plan=\"dynamic\">За уроками</button>","\" data-plan=\"static\">По абонементу</button>":"\" data-plan=\"static\">Абонемент</button>","\"><label>Количество уроков</label><input type=\"number\" name=\"total\" min=\"1\" value=\"":"\"><label>Кількість уроків</label><input type=\"number\" name=\"total\" min=\"1\" value=\"","\"><label>Оплачено до</label><input type=\"date\" name=\"paidUntil\" value=\"":"\"><label>Оплачено до</label><input type=\"date\" name=\"paidUntil\" value=\"","\"><div class=\"field-hint\">Вместо счётчика уроков будет показываться, до какого числа оплачен курс.</div></div>":"\"><div class=\"field-hint\">Замість лічильника уроків показуватиметься, до якого числа оплачено курс.</div></div>","Сохранить":"Зберегти","Создать курс":"Створити курс","Изменить событие":"Змінити подію","Новое событие":"Нова подія","<div class=\"sub\">Например, день рождения или разовое напоминание</div>":"<div class=\"sub\">Наприклад, день народження чи разове нагадування</div>","<div class=\"field\"><label>Название</label><input type=\"text\" name=\"name\" placeholder=\"Например, день рождения Иры\" value=\"":"<div class=\"field\"><label>Назва</label><input type=\"text\" name=\"name\" placeholder=\"Наприклад, день народження Іри\" value=\"","<div class=\"field\"><label>Дата</label><input type=\"date\" name=\"date\" value=\"":"<div class=\"field\"><label>Дата</label><input type=\"date\" name=\"date\" value=\"","<label class=\"switch-label\"><span>Повторять каждый год</span>":"<label class=\"switch-label\"><span>Повторювати щороку</span>","Добавить событие":"Додати подію","<div class=\"status warn\">Занятие отменено</div>":"<div class=\"status warn\">Заняття скасовано</div>","\">Восстановить</button></div>":"\">Відновити</button></div>","<div class=\"status\">Перенесено на ":"<div class=\"status\">Перенесено на ","<div class=\"status ok\">Перенесено сюда с ":"<div class=\"status ok\">Перенесено сюди з ","\">Отменить</button></div>":"\">Скасувати</button></div>","Прошло / засчитано":"Минуло / зараховано","Запланировано":"Заплановано","\">Отменить</button>":"\">Скасувати</button>","\">Перенести</button>":"\">Перенести</button>","\">ОК</button>":"\">ОК</button>","<div class=\"empty\" style=\"padding:20px 6px;\">На этот день ничего не запланировано.</div>":"<div class=\"empty\" style=\"padding:20px 6px;\">На цей день нічого не заплановано.</div>","<div class=\"sub\">Занятия и действия на этот день</div>":"<div class=\"sub\">Заняття та дії на цей день</div>","<div class=\"status ok\">Повторяется каждый год</div>":"<div class=\"status ok\">Повторюється щороку</div>","<div class=\"status\">Разовое событие</div>":"<div class=\"status\">Разова подія</div>","<div class=\"sub\">События на этот день</div>":"<div class=\"sub\">Події цього дня</div>","Изменить доход":"Змінити дохід","Новый доход":"Новий дохід","<div class=\"sub\">Зарплата, инвестиции или другой источник дохода</div>":"<div class=\"sub\">Зарплата, інвестиції чи інше джерело доходу</div>","<div class=\"field\"><label>Название</label><input type=\"text\" name=\"name\" placeholder=\"Например, зарплата\" value=\"":"<div class=\"field\"><label>Назва</label><input type=\"text\" name=\"name\" placeholder=\"Наприклад, зарплата\" value=\"","<div class=\"field\" style=\"flex:2;\"><label>Сумма</label><input type=\"number\" name=\"amount\" min=\"0\" step=\"0.01\" placeholder=\"0\" value=\"":"<div class=\"field\" style=\"flex:2;\"><label>Сума</label><input type=\"number\" name=\"amount\" min=\"0\" step=\"0.01\" placeholder=\"0\" value=\"","<label>Периодичность</label>":"<label>Періодичність</label>","\" data-schedule=\"once\">Разово</button>":"\" data-schedule=\"once\">Разово</button>","\" data-schedule=\"monthly\">Ежемесячно</button>":"\" data-schedule=\"monthly\">Щомісяця</button>","\"><label>Дата</label><input type=\"date\" name=\"date\" value=\"":"\"><label>Дата</label><input type=\"date\" name=\"date\" value=\"","\"><label>Число месяца</label><input type=\"number\" name=\"dayOfMonth\" min=\"1\" max=\"28\" value=\"":"\"><label>Число місяця</label><input type=\"number\" name=\"dayOfMonth\" min=\"1\" max=\"28\" value=\"","Добавить доход":"Додати дохід","<input type=\"text\" class=\"sf-name\" placeholder=\"Подкатегория этого расхода\" value=\"":"<input type=\"text\" class=\"sf-name\" placeholder=\"Підкатегорія цієї витрати\" value=\"","<input type=\"number\" class=\"sf-amount\" min=\"0\" step=\"0.01\" placeholder=\"Сумма\" value=\"":"<input type=\"number\" class=\"sf-amount\" min=\"0\" step=\"0.01\" placeholder=\"Сума\" value=\"","<button type=\"button\" class=\"icon-btn tiny\" data-remove-sub title=\"Убрать\">✕</button>":"<button type=\"button\" class=\"icon-btn tiny\" data-remove-sub title=\"Прибрати\">✕</button>","Изменить расход":"Змінити витрату","Новый расход":"Нова витрата","<div class=\"sub\">Появится как доля на колесе расходов</div>":"<div class=\"sub\">Зʼявиться як частка на колесі витрат</div>","<div class=\"field\"><label>Название</label><input type=\"text\" name=\"name\" placeholder=\"Например, аренда\" value=\"":"<div class=\"field\"><label>Назва</label><input type=\"text\" name=\"name\" placeholder=\"Наприклад, оренда\" value=\"","<div class=\"field\"><label>Бюджет на месяц <span class=\"dim\">(необязательно)</span></label>":"<div class=\"field\"><label>Бюджет на місяць <span class=\"dim\">(необовʼязково)</span></label>","<input type=\"number\" name=\"budget\" min=\"0\" step=\"0.01\" placeholder=\"Без лимита\" value=\"":"<input type=\"number\" name=\"budget\" min=\"0\" step=\"0.01\" placeholder=\"Без ліміту\" value=\"","<div class=\"field-hint\">Покажем, сколько потрачено в этом месяце через «+», и предупредим, когда лимит близко.</div></div>":"<div class=\"field-hint\">Покажемо, скільки витрачено цього місяця через «+», і попередимо, коли ліміт близько.</div></div>","<div class=\"sub-form-head\"><label>Подкатегории <span class=\"dim\">(необязательно)</span></label>":"<div class=\"sub-form-head\"><label>Підкатегорії <span class=\"dim\">(необовʼязково)</span></label>","<button type=\"button\" class=\"btn primary\" id=\"sub-add-btn\" title=\"Добавить подкатегорию\">+ Подкатегория</button></div>":"<button type=\"button\" class=\"btn primary\" id=\"sub-add-btn\" title=\"Додати підкатегорію\">+ Підкатегорія</button></div>","<div class=\"field-hint\">Разбивка суммы расхода: например, у «Магазина» — хлеб, молоко. Общую сумму они сами не меняют, а кнопка «+» на подкатегории добавляет трату и в неё, и в расход.</div>":"<div class=\"field-hint\">Розбивка суми витрати: наприклад, у «Магазину» — хліб, молоко. Загальну суму вони самі не змінюють, а кнопка «+» на підкатегорії додає витрату і в неї, і у витрату.</div>","Добавить расход":"Додати витрату","Изменить задачу":"Змінити задачу","Изменить урок":"Змінити урок","Новая задача":"Нова задача","Новый урок":"Новий урок","<div class=\"sub\">Сначала добавьте ":"<div class=\"sub\">Спочатку додайте ","саму задачу":"саму задачу","сам урок":"сам урок"," — дни и время для ":" — дні та час для ","неё":"неї","него":"нього"," можно будет расставить после, кнопкой «+» на карточке</div>":" можна буде розставити потім кнопкою «+» на картці</div>","<div class=\"field\"><label>Название</label><input type=\"text\" name=\"name\" placeholder=\"":"<div class=\"field\"><label>Назва</label><input type=\"text\" name=\"name\" placeholder=\"","Например, купить продукты":"Наприклад, купити продукти","Например, математика":"Наприклад, математика","<div class=\"field\"><label>Описание (необязательно)</label><textarea name=\"notes\" placeholder=\"":"<div class=\"field\"><label>Опис (необовʼязково)</label><textarea name=\"notes\" placeholder=\"","Детали, ссылки, заметки...":"Деталі, посилання, нотатки...","Кабинет, преподаватель, детали...":"Кабінет, викладач, деталі...","Добавить":"Додати","Изменить время":"Змінити час","Добавить время":"Додати час","Для задачи":"Для задачі","Для урока":"Для уроку","» — выберите, когда</div>":"» — виберіть, коли</div>","<div class=\"field\"><label>Повтор</label>":"<div class=\"field\"><label>Повтор</label>","\" data-repeat=\"weekly\">Каждую неделю</button>":"\" data-repeat=\"weekly\">Щотижня</button>","\" data-repeat=\"once\">Один раз</button>":"\" data-repeat=\"once\">Один раз</button>","\"><label>День недели</label><div class=\"day-toggles\">":"\"><label>День тижня</label><div class=\"day-toggles\">","\"><label>Дата</label>":"\"><label>Дата</label>","<div class=\"field\"><label>Время</label><div class=\"field-row\">":"<div class=\"field\"><label>Час</label><div class=\"field-row\">","\" title=\"Подробнее\">…</button>":"\" title=\"Детальніше\">…</button>"," · каждую неделю":" · щотижня","выполнено":"виконано","не выполнено":"не виконано","<div class=\"section-title\" style=\"margin-top:6px;\">Описание</div>":"<div class=\"section-title\" style=\"margin-top:6px;\">Опис</div>","<div class=\"dim\" style=\"font-size:14px;\">Описания нет.</div>":"<div class=\"dim\" style=\"font-size:14px;\">Опису немає.</div>","<div class=\"modal-actions\"><button type=\"button\" class=\"btn\" data-act=\"close-modal\">Закрыть</button></div>":"<div class=\"modal-actions\"><button type=\"button\" class=\"btn\" data-act=\"close-modal\">Закрити</button></div>","<span class=\"tag\">разово</span>":"<span class=\"tag\">разово</span>","\">Изменить время</button>":"\">Змінити час</button>","\">Удалить</button>":"\">Видалити</button>","Задачи на этот день":"Задачі на цей день","Расписание на этот день":"Розклад на цей день","<div class=\"status ok\">Получено</div>":"<div class=\"status ok\">Отримано</div>","<div class=\"status warn\">В этот раз не будет</div>":"<div class=\"status warn\">Цього разу не буде</div>","\">Вернуть</button>":"\">Повернути</button>","<div class=\"status warn\">Ждёт подтверждения</div>":"<div class=\"status warn\">Чекає підтвердження</div>","\">Пришла</button>":"\">Прийшла</button>","Ежемесячная выплата":"Щомісячна виплата","Разовый доход":"Разовий дохід","<div class=\"status\">Перенесено с ":"<div class=\"status\">Перенесено з ","поступление":"надходження","пополнение":"поповнення","\">Удалить запись</button></div>":"\">Видалити запис</button></div>"," · трата</span><span class=\"mono\" style=\"font-size:12px;color:var(--rose);\">-":" · витрата</span><span class=\"mono\" style=\"font-size:12px;color:var(--rose);\">-","<div class=\"sub\">Финансы за этот день</div>":"<div class=\"sub\">Фінанси за цей день</div>","\">Изменить</button>":"\">Змінити</button>","<div class=\"empty\" style=\"padding:12px 6px;\">Пока нет основных балансов.</div>":"<div class=\"empty\" style=\"padding:12px 6px;\">Поки немає основних балансів.</div>","<div class=\"empty\" style=\"padding:12px 6px;\">Пока нет второстепенных балансов.</div>":"<div class=\"empty\" style=\"padding:12px 6px;\">Поки немає другорядних балансів.</div>","<h3 class=\"display\">Баланс</h3>":"<h3 class=\"display\">Баланс</h3>","<div class=\"sub\">Основные балансы — от 1 до ":"<div class=\"sub\">Основні баланси — від 1 до "," (например, главная карта). Второстепенные — наличные, копилка и т.д.</div>":" (наприклад, головна картка). Другорядні — готівка, скарбничка тощо.</div>","<div class=\"section-title\">Основные балансы <span class=\"dim\">(":"<div class=\"section-title\">Основні баланси <span class=\"dim\">(","<div class=\"section-title\">Второстепенные балансы</div>":"<div class=\"section-title\">Другорядні баланси</div>","<div class=\"field\"><label>Тип баланса</label>":"<div class=\"field\"><label>Тип балансу</label>","\" data-balkind=\"main\">Основной</button>":"\" data-balkind=\"main\">Основний</button>","\" data-balkind=\"secondary\">Второстепенный</button>":"\" data-balkind=\"secondary\">Другорядний</button>","<div class=\"field\"><label>Пометка (необязательно)</label><input type=\"text\" name=\"label\" placeholder=\"Например, карта или наличные\" value=\"":"<div class=\"field\"><label>Позначка (необовʼязково)</label><input type=\"text\" name=\"label\" placeholder=\"Наприклад, картка або готівка\" value=\"","<button type=\"button\" class=\"btn\" data-act=\"cancel-edit-balance\">Отмена</button>":"<button type=\"button\" class=\"btn\" data-act=\"cancel-edit-balance\">Скасувати</button>","<div class=\"field\"><label>Счёт</label><select name=\"balanceId\">":"<div class=\"field\"><label>Рахунок</label><select name=\"balanceId\">","<option value=\"\">Не изменять баланс</option>":"<option value=\"\">Не змінювати баланс</option>","<h3 class=\"display\">Выплата пришла</h3>":"<h3 class=\"display\">Виплата прийшла</h3>","» за ":"» за "," (перенесена на ":" (перенесена на ",". Проверьте сумму — она зачислится на выбранный счёт.</div>":". Перевірте суму — вона зарахується на вибраний рахунок.</div>","<div class=\"field\"><label>Сумма (":"<div class=\"field\"><label>Сума (","Нет счёта в валюте ":"Немає рахунку у валюті "," — выплата отметится, но баланс не изменится. Счёт можно добавить через виджет «Баланс».":" — виплату буде відмічено, але баланс не зміниться. Рахунок можна додати через віджет «Баланс».","<div class=\"field\"><label>Дата поступления</label><input type=\"date\" name=\"date\" value=\"":"<div class=\"field\"><label>Дата надходження</label><input type=\"date\" name=\"date\" value=\"","<button type=\"submit\" class=\"btn primary\">Зачислить</button>":"<button type=\"submit\" class=\"btn primary\">Зарахувати</button>","<h3 class=\"display\">Перенести выплату</h3>":"<h3 class=\"display\">Перенести виплату</h3>","» ожидалась ":"» очікувалася ",". Выберите новую дату — в этот день приложение снова спросит, пришли ли деньги.</div>":". Виберіть нову дату — цього дня застосунок знову запитає, чи прийшли гроші.</div>","<div class=\"field\"><label>Новая дата</label><input type=\"date\" name=\"date\" value=\"":"<div class=\"field\"><label>Нова дата</label><input type=\"date\" name=\"date\" value=\"","<button type=\"button\" class=\"btn danger\" data-act=\"income-skip\">В этот раз не будет</button>":"<button type=\"button\" class=\"btn danger\" data-act=\"income-skip\">Цього разу не буде</button>","<button type=\"submit\" class=\"btn primary\">Перенести</button>":"<button type=\"submit\" class=\"btn primary\">Перенести</button>","Сегодня день выплаты":"Сьогодні день виплати","Ожидалась вчера":"Очікувалася вчора","Ожидалась ":"Очікувалася "," — пришла?</div></div></div>":" — прийшла?</div></div></div>",">Перенести</button>":">Перенести</button>",">Пришла</button>":">Прийшла</button>","<div class=\"notice\"><div class=\"notice-title\">Подтвердите поступление</div>":"<div class=\"notice\"><div class=\"notice-title\">Підтвердіть надходження</div>","Превышен на <b>":"Перевищено на <b>","<div class=\"budget-top\"><span>В этом месяце ":"<div class=\"budget-top\"><span>Цього місяця ","<div class=\"stats-head\"><div class=\"stats-title\">Последние 6 месяцев</div>":"<div class=\"stats-head\"><div class=\"stats-title\">Останні 6 місяців</div>","<div class=\"stats-legend\"><span><i class=\"lg-inc\"></i>Доходы</span><span><i class=\"lg-exp\"></i>Расходы</span></div></div>":"<div class=\"stats-legend\"><span><i class=\"lg-inc\"></i>Доходи</span><span><i class=\"lg-exp\"></i>Витрати</span></div></div>","<div class=\"empty\" style=\"padding:18px 6px;\">Здесь появится график, когда вы начнёте добавлять суммы через «+» или подтверждать выплаты.</div></div>":"<div class=\"empty\" style=\"padding:18px 6px;\">Тут зʼявиться графік, коли ви почнете додавати суми через «+» або підтверджувати виплати.</div></div>","%\" title=\"Доходы: ":"%\" title=\"Доходи: ","%\" title=\"Расходы: ":"%\" title=\"Витрати: ","<div><span>Доходы</span><b class=\"pos\">":"<div><span>Доходи</span><b class=\"pos\">","<div><span>Расходы</span><b class=\"neg\">":"<div><span>Витрати</span><b class=\"neg\">","<div><span>Итог месяца</span><b>":"<div><span>Підсумок місяця</span><b>","<div class=\"field-hint\">Учитываются операции с датой: суммы через «+», подтверждённые выплаты и оплаты курсов. Сумму, вписанную в карточку вручную, график не видит.</div>":"<div class=\"field-hint\">Враховуються операції з датою: суми через «+», підтверджені виплати та оплати курсів. Суму, вписану в картку вручну, графік не бачить.</div>","<div class=\"field-hint\">Без курса не учтены: ":"<div class=\"field-hint\">Без курсу не враховано: ",". Добавьте курс в «Курсы валют».</div>":". Додайте курс у «Курси валют».</div>","доходу":"доходу","расходу":"витрати","прибавится к выбранному счёту":"додасться до вибраного рахунку","спишется с выбранного счёта":"спишеться з вибраного рахунку","<div class=\"field-hint\" style=\"margin-bottom:14px;\">Нет счёта в валюте ":"<div class=\"field-hint\" style=\"margin-bottom:14px;\">Немає рахунку у валюті "," — сумма добавится к карточке, но баланс не изменится. Можно добавить счёт через «Баланс» в меню.</div>":" — сума додасться до картки, але баланс не зміниться. Рахунок можна додати через «Баланс» у меню.</div>","<h3 class=\"display\">Добавить сумму</h3>":"<h3 class=\"display\">Додати суму</h3>","К подкатегории «":"До підкатегорії «","» (расход «":"» (витрата «","»), сейчас ":"»), зараз ",". Сумма ":". Сума "," и добавится к общей сумме расхода.":" і додасться до загальної суми витрати.","К «":"До «","), сейчас ":"), зараз ","<div class=\"field\"><label>Дата траты</label><input type=\"date\" name=\"date\" value=\"":"<div class=\"field\"><label>Дата витрати</label><input type=\"date\" name=\"date\" value=\"","<button type=\"submit\" class=\"btn primary\">Добавить</button>":"<button type=\"submit\" class=\"btn primary\">Додати</button>","<div class=\"empty\" style=\"padding:16px 6px;\">Пока нет сохранённых курсов.</div>":"<div class=\"empty\" style=\"padding:16px 6px;\">Поки немає збережених курсів.</div>","<h3 class=\"display\">Курсы валют</h3>":"<h3 class=\"display\">Курси валют</h3>","<div class=\"sub\">Сохранённые курсы конвертации для колеса расходов</div>":"<div class=\"sub\">Збережені курси конвертації для колеса витрат</div>","<div class=\"field\" style=\"flex:1;\"><label>Из</label><select name=\"from\">":"<div class=\"field\" style=\"flex:1;\"><label>З</label><select name=\"from\">","<div class=\"field\" style=\"flex:1;\"><label>В</label><select name=\"to\">":"<div class=\"field\" style=\"flex:1;\"><label>В</label><select name=\"to\">","<div class=\"field\"><label>Курс (1 «Из» = ? «В»)</label><input type=\"number\" step=\"any\" min=\"0\" name=\"value\" value=\"":"<div class=\"field\"><label>Курс (1 «З» = ? «В»)</label><input type=\"number\" step=\"any\" min=\"0\" name=\"value\" value=\"","<button type=\"button\" class=\"btn\" data-act=\"cancel-edit-rate\">Отмена</button>":"<button type=\"button\" class=\"btn\" data-act=\"cancel-edit-rate\">Скасувати</button>","Добавить курс":"Додати курс","<div class=\"empty\" style=\"padding:16px 6px;\">Пока нет ни одной транзакции.</div>":"<div class=\"empty\" style=\"padding:16px 6px;\">Поки немає жодної транзакції.</div>","<h3 class=\"display\">История транзакций</h3>":"<h3 class=\"display\">Історія транзакцій</h3>","<div class=\"sub\">Все пополнения и траты по карточкам этой доски, от новых к старым</div>":"<div class=\"sub\">Усі поповнення та витрати за картками цієї дошки, від нових до старих</div>","\" title=\"Переименовать\">":"\" title=\"Перейменувати\">","\" title=\"Клонировать\">":"\" title=\"Клонувати\">","\" title=\"Удалить доску\">":"\" title=\"Видалити дошку\">","<h3 class=\"display\">Доски</h3>":"<h3 class=\"display\">Дошки</h3>","<div class=\"sub\">Переключайтесь между календарями или создайте новый</div>":"<div class=\"sub\">Перемикайтеся між календарями або створіть новий</div>","<label>Новая доска</label>":"<label>Нова дошка</label>","<span>Выбрать тип доски: ":"<span>Вибрати тип дошки: ","<div class=\"field-row\" style=\"margin-top:10px;\"><input type=\"text\" id=\"new-board-name\" placeholder=\"Название доски\"><button class=\"btn primary\" data-act=\"create-board\">+</button></div>":"<div class=\"field-row\" style=\"margin-top:10px;\"><input type=\"text\" id=\"new-board-name\" placeholder=\"Назва дошки\"><button class=\"btn primary\" data-act=\"create-board\">+</button></div>","<button type=\"button\" class=\"btn\" style=\"width:100%;\" data-act=\"open-settings\">⚙ Настройки</button>":"<button type=\"button\" class=\"btn\" style=\"width:100%;\" data-act=\"open-settings\">⚙ Налаштування</button>","Удалить?":"Видалити?","Удалить курс?":"Видалити курс?","Удалить событие?":"Видалити подію?","Удалить доход?":"Видалити дохід?"," История транзакций карточки тоже удалится, баланс при этом не изменится.":" Історія транзакцій картки теж видалиться, баланс при цьому не зміниться.","Удалить расход?":"Видалити витрату?","Удалить задачу?":"Видалити задачу?","Удалить урок?":"Видалити урок?","<div class=\"sub\">Вы точно хотите удалить «":"<div class=\"sub\">Ви точно хочете видалити «","»? Это действие нельзя отменить.":"»? Цю дію не можна скасувати.","<button type=\"button\" class=\"btn\" data-act=\"cancel-dialog\">Нет</button>":"<button type=\"button\" class=\"btn\" data-act=\"cancel-dialog\">Ні</button>","<button type=\"button\" class=\"btn danger\" data-act=\"confirm-delete-card\">Да</button>":"<button type=\"button\" class=\"btn danger\" data-act=\"confirm-delete-card\">Так</button>","<h3 class=\"display\">Удалить доску?</h3>":"<h3 class=\"display\">Видалити дошку?</h3>","<div class=\"sub\">Вы точно хотите удалить эту доску? «":"<div class=\"sub\">Ви точно хочете видалити цю дошку? «","» и все её данные будут удалены без возможности восстановления.</div>":"» і всі її дані буде видалено без можливості відновлення.</div>","<button type=\"button\" class=\"btn danger\" data-act=\"confirm-delete-board\">Да</button>":"<button type=\"button\" class=\"btn danger\" data-act=\"confirm-delete-board\">Так</button>","<h3 class=\"display\">Название доски</h3>":"<h3 class=\"display\">Назва дошки</h3>","<div class=\"sub\">Введите новое название</div>":"<div class=\"sub\">Введіть нову назву</div>","<button type=\"submit\" class=\"btn primary\">Сохранить</button>":"<button type=\"submit\" class=\"btn primary\">Зберегти</button>","<h3 class=\"display\">Настройки</h3>":"<h3 class=\"display\">Налаштування</h3>","<div class=\"sub\">Оформление, язык, сводка и резервные копии</div>":"<div class=\"sub\">Оформлення, мова, зведення та резервні копії</div>","<label>Тема</label>":"<label>Тема</label>","\" data-act=\"set-theme\" data-theme=\"dark\">Тёмная</button>":"\" data-act=\"set-theme\" data-theme=\"dark\">Темна</button>","\" data-act=\"set-theme\" data-theme=\"light\">Светлая</button>":"\" data-act=\"set-theme\" data-theme=\"light\">Світла</button>","\" data-act=\"set-theme\" data-theme=\"auto\">Как в системе</button>":"\" data-act=\"set-theme\" data-theme=\"auto\">Як у системі</button>","<label class=\"switch-label\"><span>Показывать сводку дня при запуске</span>":"<label class=\"switch-label\"><span>Показувати зведення дня під час запуску</span>","<label>Резервная копия</label>":"<label>Резервна копія</label>","<button type=\"button\" class=\"btn primary\" style=\"width:100%;\" data-act=\"download-backup\">⬇ Скачать копию всех досок</button>":"<button type=\"button\" class=\"btn primary\" style=\"width:100%;\" data-act=\"download-backup\">⬇ Завантажити копію всіх дошок</button>","<div class=\"field-hint\">Сохраните файл в надёжное место — если браузер очистит данные, из него можно всё восстановить.</div>":"<div class=\"field-hint\">Збережіть файл у надійному місці — якщо браузер очистить дані, з нього можна все відновити.</div>","<label>Поделиться текущей доской</label>":"<label>Поділитися поточною дошкою</label>","<button type=\"button\" class=\"btn\" style=\"width:100%;\" data-act=\"download-board\">⬇ Скачать файл доски</button>":"<button type=\"button\" class=\"btn\" style=\"width:100%;\" data-act=\"download-board\">⬇ Завантажити файл дошки</button>","<div class=\"field-hint\">Отправьте файл как обычно (мессенджер, почта) — размер доски тут не важен.</div>":"<div class=\"field-hint\">Надішліть файл як зазвичай (месенджер, пошта) — розмір дошки тут не важливий.</div>","<label>Загрузить доску или копию из файла</label>":"<label>Завантажити дошку чи копію з файлу</label>","<button type=\"button\" class=\"btn primary\" data-act=\"pick-board-file\">Выбрать файл</button>":"<button type=\"button\" class=\"btn primary\" data-act=\"pick-board-file\">Вибрати файл</button>","<div class=\"field-hint\" style=\"margin-top:10px;\">или перетащите файл сюда</div>":"<div class=\"field-hint\" style=\"margin-top:10px;\">або перетягніть файл сюди</div>","Введите название":"Введіть назву","Выберите хотя бы один день недели":"Виберіть хоча б один день тижня","Неверное время — введите, например, 14:30":"Неправильний час — введіть, наприклад, 14:30","Без названия":"Без назви","Укажите дату, до которой оплачено":"Вкажіть дату, до якої оплачено","Укажите дату":"Вкажіть дату","Укажите сумму":"Вкажіть суму","Основных балансов может быть не больше ":"Основних балансів може бути не більше ","Добавлено, но счёт не найден — баланс не изменён.":"Додано, але рахунок не знайдено — баланс не змінено.","<option value=\"new\">+ Новая категория «":"<option value=\"new\">+ Нова категорія «","<option value=\"\">Не списывать со счёта</option>":"<option value=\"\">Не списувати з рахунку</option>","Укажите количество уроков":"Вкажіть кількість уроків","Укажите курс":"Вкажіть курс","Валюты должны различаться":"Валюти мають відрізнятися","Время удалено":"Час видалено","Запись удалена":"Запис видалено","Баланс удалён":"Баланс видалено","Доска удалена":"Дошку видалено","Оплата удалена":"Оплату видалено","Отмечено: в этот раз выплаты не будет":"Відмічено: цього разу виплати не буде","<button class=\"icon-btn\" data-act=\"prev-month\" aria-label=\"Предыдущий месяц\">‹</button>":"<button class=\"icon-btn\" data-act=\"prev-month\" aria-label=\"Попередній місяць\">‹</button>","<button class=\"icon-btn\" data-act=\"next-month\" aria-label=\"Следующий месяц\">›</button>":"<button class=\"icon-btn\" data-act=\"next-month\" aria-label=\"Наступний місяць\">›</button>","Календарь занятий":"Календар занять","Язык":"Мова","После смены языка страница перезагрузится.":"Після зміни мови сторінка перезавантажиться.","Как в системе":"Як у системі"}
-  };
-  // строки, добавленные позже
-  Object.assign(I18N.en, {"Подписки": "Subscriptions", "Привычки": "Habits", "в год": "per year", "в неделю": "per week", "в месяц": "per month", "завтра": "tomorrow", "через": "in", "подписка": "subscription", "Оплата отмечена · расход записан в «": "Payment marked · expense saved to «", "Оплата отмечена": "Payment marked", "Подписка возобновлена": "Subscription resumed", "Подписка на паузе": "Subscription paused", "Сегодня списание": "Charged today", "Списание было": "Was charged on", "оплачено?": "paid?", "Пропустить": "Skip", "Оплачено": "Paid", "Спишется": "Will be charged", "Подтвердите списание": "Confirm the charge", "Скоро списание": "Charge coming up", "Пока пусто": "Nothing here yet", "Добавьте Netflix, Spotify, iCloud — приложение напомнит о списании и запишет его в расходы.": "Add Netflix, Spotify, iCloud — the app will remind you about charges and save them to expenses.", "На паузе — списания не отслеживаются": "Paused — charges aren't tracked", "Ждёт подтверждения оплаты": "Awaiting payment confirmation", "Следующее списание": "Next charge", "Поставить на паузу": "Pause", "Возобновить": "Resume", "Изменить": "Edit", "Удалить": "Delete", "Оплачено всего": "Paid in total", "Добавить подписку": "Add subscription", "В ближайшие недели списаний нет.": "No charges in the coming weeks.", "Расходы на подписки": "Subscription costs", "Активных": "Active", "В месяц": "Per month", "В год": "Per year", "Ближайшие списания": "Upcoming charges", "Отменить оплату": "Cancel payment", "Пропущено": "Skipped", "Вернуть": "Bring back", "Ждёт подтверждения": "Awaiting confirmation", "В этот день списаний нет.": "No charges on this day.", "Списания в этот день": "Charges on this day", "История оплат": "Payment history", "за": "for", "оплачено": "paid", "в расходах": "in expenses", "Оплат пока нет.": "No payments yet.", "Изменить подписку": "Edit subscription", "Новая подписка": "New subscription", "Укажите сумму и дату списания — приложение посчитает расходы и напомнит заранее": "Enter the amount and charge date — the app will total your costs and remind you in advance", "Название": "Name", "Например, Netflix": "E.g. Netflix", "Сумма": "Amount", "Валюта": "Currency", "Как часто": "How often", "Каждый месяц": "Every month", "Каждый год": "Every year", "Каждую неделю": "Every week", "Дата списания": "Charge date", "Любая дата списания (прошлая или ближайшая) — от неё приложение посчитает все следующие.": "Any charge date (past or upcoming) — the app will work out all the following ones from it.", "Цвет": "Color", "Отмена": "Cancel", "Оплата": "Payment", "Списание за": "Charge for", "Проверьте сумму — если цена изменилась, впишите новую.": "Check the amount — if the price changed, enter the new one.", "Дата оплаты": "Payment date", "Запомнить новую цену для следующих списаний": "Remember the new price for future charges", "Записать в расходы": "Save as expense", "Создайте доску «Финансы» — тогда оплаты подписок будут сразу попадать в расходы.": "Create a «Finance» board — then subscription payments will go straight into expenses.", "подряд": "in a row", "Сделано": "Done", "Отметить": "Mark", "Добавьте привычку — например, «Вода, 8 стаканов» или «Спорт» по будням.": "Add a habit — e.g. «Water, 8 glasses» or «Workout» on weekdays.", "Серия ещё не началась": "No streak yet", "рекорд": "best", "Сегодня выходной от этой привычки": "Today is a day off for this habit", "Добавить привычку": "Add habit", "Сегодня": "Today", "из": "of", "На сегодня привычек нет.": "No habits for today.", "За последние 30 дней": "Last 30 days", "Отметить можно будет в этот день": "You can mark it on that day", "В этот день привычек нет.": "No habits on this day.", "Привычки в этот день": "Habits on this day", "Изменить привычку": "Edit habit", "Новая привычка": "New habit", "Отмечайте каждый день — приложение посчитает серию и процент выполнения": "Mark it every day — the app will count your streak and completion rate", "Например, вода или зарядка": "E.g. water or morning exercise", "Как отмечать": "How to track", "Галочкой": "Checkmark", "Счётчиком": "Counter", "Цель в день": "Daily goal", "Единица": "Unit", "стаканов": "glasses", "В какие дни": "Which days", "В другие дни привычка не ждёт отметки и не обнуляет серию.": "On other days the habit doesn't wait for a mark and doesn't break the streak.", "Подписка удалена": "Subscription deleted", "Привычка удалена": "Habit deleted", "подписки": "subscriptions", "привычки": "habits", "Расход начинается с нуля — траты добавляйте кнопкой «+» на карточке, тогда они попадут в историю и график.": "An expense starts at zero — add spending with the «+» button on the card so it gets into the history and the chart.", "Списание пропущено": "Charge skipped", "Доски": "Boards"});
-  Object.assign(I18N.uk, {"Подписки": "Підписки", "Привычки": "Звички", "в год": "на рік", "в неделю": "на тиждень", "в месяц": "на місяць", "завтра": "завтра", "через": "через", "подписка": "підписка", "Оплата отмечена · расход записан в «": "Оплату відмічено · витрату записано в «", "Оплата отмечена": "Оплату відмічено", "Подписка возобновлена": "Підписку відновлено", "Подписка на паузе": "Підписку на паузі", "Сегодня списание": "Сьогодні списання", "Списание было": "Списання було", "оплачено?": "оплачено?", "Пропустить": "Пропустити", "Оплачено": "Оплачено", "Спишется": "Спишеться", "Подтвердите списание": "Підтвердіть списання", "Скоро списание": "Скоро списання", "Пока пусто": "Поки порожньо", "Добавьте Netflix, Spotify, iCloud — приложение напомнит о списании и запишет его в расходы.": "Додайте Netflix, Spotify, iCloud — застосунок нагадає про списання й запише його у витрати.", "На паузе — списания не отслеживаются": "На паузі — списання не відстежуються", "Ждёт подтверждения оплаты": "Чекає підтвердження оплати", "Следующее списание": "Наступне списання", "Поставить на паузу": "Поставити на паузу", "Возобновить": "Відновити", "Изменить": "Змінити", "Удалить": "Видалити", "Оплачено всего": "Оплачено всього", "Добавить подписку": "Додати підписку", "В ближайшие недели списаний нет.": "Найближчими тижнями списань немає.", "Расходы на подписки": "Витрати на підписки", "Активных": "Активних", "В месяц": "На місяць", "В год": "На рік", "Ближайшие списания": "Найближчі списання", "Отменить оплату": "Скасувати оплату", "Пропущено": "Пропущено", "Вернуть": "Повернути", "Ждёт подтверждения": "Чекає підтвердження", "В этот день списаний нет.": "Цього дня списань немає.", "Списания в этот день": "Списання цього дня", "История оплат": "Історія оплат", "за": "за", "оплачено": "оплачено", "в расходах": "у витратах", "Оплат пока нет.": "Оплат поки немає.", "Изменить подписку": "Змінити підписку", "Новая подписка": "Нова підписка", "Укажите сумму и дату списания — приложение посчитает расходы и напомнит заранее": "Вкажіть суму й дату списання — застосунок порахує витрати та нагадає заздалегідь", "Название": "Назва", "Например, Netflix": "Наприклад, Netflix", "Сумма": "Сума", "Валюта": "Валюта", "Как часто": "Як часто", "Каждый месяц": "Щомісяця", "Каждый год": "Щороку", "Каждую неделю": "Щотижня", "Дата списания": "Дата списання", "Любая дата списания (прошлая или ближайшая) — от неё приложение посчитает все следующие.": "Будь-яка дата списання (минула чи найближча) — від неї застосунок порахує всі наступні.", "Цвет": "Колір", "Отмена": "Скасувати", "Оплата": "Оплата", "Списание за": "Списання за", "Проверьте сумму — если цена изменилась, впишите новую.": "Перевірте суму — якщо ціна змінилася, впишіть нову.", "Дата оплаты": "Дата оплати", "Запомнить новую цену для следующих списаний": "Запамʼятати нову ціну для наступних списань", "Записать в расходы": "Записати у витрати", "Создайте доску «Финансы» — тогда оплаты подписок будут сразу попадать в расходы.": "Створіть дошку «Фінанси» — тоді оплати підписок одразу потраплятимуть у витрати.", "подряд": "поспіль", "Сделано": "Зроблено", "Отметить": "Відмітити", "Добавьте привычку — например, «Вода, 8 стаканов» или «Спорт» по будням.": "Додайте звичку — наприклад, «Вода, 8 склянок» або «Спорт» у будні.", "Серия ещё не началась": "Серія ще не почалася", "рекорд": "рекорд", "Сегодня выходной от этой привычки": "Сьогодні вихідний від цієї звички", "Добавить привычку": "Додати звичку", "Сегодня": "Сьогодні", "из": "з", "На сегодня привычек нет.": "На сьогодні звичок немає.", "За последние 30 дней": "За останні 30 днів", "Отметить можно будет в этот день": "Відмітити можна буде цього дня", "В этот день привычек нет.": "Цього дня звичок немає.", "Привычки в этот день": "Звички цього дня", "Изменить привычку": "Змінити звичку", "Новая привычка": "Нова звичка", "Отмечайте каждый день — приложение посчитает серию и процент выполнения": "Відмічайте щодня — застосунок порахує серію та відсоток виконання", "Например, вода или зарядка": "Наприклад, вода або зарядка", "Как отмечать": "Як відмічати", "Галочкой": "Галочкою", "Счётчиком": "Лічильником", "Цель в день": "Мета на день", "Единица": "Одиниця", "стаканов": "склянок", "В какие дни": "У які дні", "В другие дни привычка не ждёт отметки и не обнуляет серию.": "В інші дні звичка не чекає відмітки й не обнуляє серію.", "Подписка удалена": "Підписку видалено", "Привычка удалена": "Звичку видалено", "подписки": "підписки", "привычки": "звички", "Расход начинается с нуля — траты добавляйте кнопкой «+» на карточке, тогда они попадут в историю и график.": "Витрата починається з нуля — суми додавайте кнопкою «+» на картці, тоді вони потраплять в історію та графік.", "Списание пропущено": "Списання пропущено", "Доски": "Дошки"});
-  Object.assign(I18N.en, {"вчера": "yesterday", "позавчера": "the day before yesterday", "Доска": "Board", "доходы": "income", "расходы": "expenses", "Зачислено на": "Credited to", "Списано с": "Taken from", "осталось": "left", "Баланс не менялся — счёта в этой валюте нет": "Balance unchanged — no account in this currency", "Бюджет месяца": "Monthly budget", "Готово": "Done", "Отменено": "Undone", "Не вижу сумму 🤔 Напишите, например:": "I don't see an amount 🤔 Try, for example:", "кофе 85": "coffee 85", "Справка": "Help", "Сначала создайте доску «Финансы» — туда будут записываться траты и доходы.": "First create a «Finance» board — spending and income will be saved there.", "А на что? Добавьте название:": "On what? Add a name:", "зарплата": "salary", "кофе": "coffee", "Запомнил: «": "Remembered: «", "» → ": "» → ", "Новая": "New", "Создана категория": "Category created", "Не нашёл такой доход:": "Couldn't find this income:", "Не нашёл категорию для": "Couldn't find a category for", "Куда записать?": "Where should it go?", "уже было отмечено": "already marked", "отмечено": "marked", "Как писать": "How to type", "трата сегодня": "spending today", "такси 200 вчера": "taxi 200 yesterday", "трата за вчера (или дата: 28.09)": "spending yesterday (or a date: 28.09)", "хлеб 30 наличные": "bread 30 cash", "с конкретного счёта, подкатегории тоже находятся": "from a specific account; subcategories are found too", "+5000 зарплата": "+5000 salary", "доход (плюс перед суммой)": "income (plus before the amount)", "20 $ подписка": "20 $ subscription", "в другой валюте": "in another currency", "вода": "water", "вода 2": "water 2", "отметить привычку": "mark a habit", "Если категорию не найду — предложу выбрать, и запомню слово на будущее.": "If I can't find a category, I'll offer a choice and remember the word for next time.", "Не получилось разобрать 😕 Попробуйте иначе или напишите «?»": "Couldn't understand that 😕 Try another way or type «?»", "Быстрый ввод": "Quick entry", "Траты, доходы и привычки одной строкой": "Spending, income and habits in one line", "Закрыть": "Close", "Например: кофе 85": "E.g.: coffee 85", "Отправить": "Send", "Привет! Напишите трату одной строкой — например,": "Hi! Type a spending in one line — for example,", "Я сам найду категорию и счёт. Справка — «?»": "I'll find the category and account myself. Help — «?»", "регулярный платёж": "regular payment", "Оплачено · списано с «": "Paid · taken from «", "Регулярный платёж": "Regular payment", "Сумма платежа": "Payment amount", "Число месяца": "Day of month", "Аренда, коммуналка, интернет… В этот день приложение спросит «Оплатили?» и спишет сумму со счёта. Если в месяце нет такого числа — платёж будет в последний день.": "Rent, utilities, internet… On that day the app will ask «Paid?» and take the amount from the account. If the month has no such day, the payment falls on the last day.", "Перенести": "Move", "В этот раз не платим": "Not paying this time", "Ждёт оплаты": "Awaiting payment", "Перенести платёж": "Move the payment", "был запланирован на": "was scheduled for", "Выберите новую дату — в этот день приложение снова спросит об оплате.": "Pick a new date — on that day the app will ask about the payment again.", "Списать со счёта": "Take from account", "Не списывать со счёта": "Don't take from an account", "Нет счёта в этой валюте — платёж отметится, но баланс не изменится.": "No account in this currency — the payment will be marked, but the balance won't change.", "Платёж за": "Payment for", "перенесён на": "moved to", "Проверьте сумму — она спишется с выбранного счёта.": "Check the amount — it will be taken from the selected account.", "Сегодня день оплаты": "Payment due today", "Платёж был": "Payment was due", "оплатили?": "paid?", "Платёж": "Payment", "Подтвердите оплату": "Confirm the payment", "Скоро платёж": "Payment coming up", "Регулярно": "Regular", "-го числа": " of each month", "Следующий платёж": "Next payment", "Укажите сумму платежа": "Enter the payment amount", "Число месяца — от 1 до 31": "Day of month must be 1 to 31", "Отмечено: в этот раз не платим": "Marked: not paying this time"});
-  Object.assign(I18N.uk, {"вчера": "вчора", "позавчера": "позавчора", "Доска": "Дошка", "доходы": "доходи", "расходы": "витрати", "Зачислено на": "Зараховано на", "Списано с": "Списано з", "осталось": "залишилось", "Баланс не менялся — счёта в этой валюте нет": "Баланс не змінився — рахунку в цій валюті немає", "Бюджет месяца": "Бюджет місяця", "Готово": "Готово", "Отменено": "Скасовано", "Не вижу сумму 🤔 Напишите, например:": "Не бачу суми 🤔 Напишіть, наприклад:", "кофе 85": "кава 85", "Справка": "Довідка", "Сначала создайте доску «Финансы» — туда будут записываться траты и доходы.": "Спочатку створіть дошку «Фінанси» — туди записуватимуться витрати й доходи.", "А на что? Добавьте название:": "А на що? Додайте назву:", "зарплата": "зарплата", "кофе": "кава", "Запомнил: «": "Запамʼятав: «", "» → ": "» → ", "Новая": "Нова", "Создана категория": "Створено категорію", "Не нашёл такой доход:": "Не знайшов такого доходу:", "Не нашёл категорию для": "Не знайшов категорію для", "Куда записать?": "Куди записати?", "уже было отмечено": "вже було відмічено", "отмечено": "відмічено", "Как писать": "Як писати", "трата сегодня": "витрата сьогодні", "такси 200 вчера": "таксі 200 вчора", "трата за вчера (или дата: 28.09)": "витрата за вчора (або дата: 28.09)", "хлеб 30 наличные": "хліб 30 готівка", "с конкретного счёта, подкатегории тоже находятся": "з конкретного рахунку, підкатегорії теж знаходяться", "+5000 зарплата": "+5000 зарплата", "доход (плюс перед суммой)": "дохід (плюс перед сумою)", "20 $ подписка": "20 $ підписка", "в другой валюте": "в іншій валюті", "вода": "вода", "вода 2": "вода 2", "отметить привычку": "відмітити звичку", "Если категорию не найду — предложу выбрать, и запомню слово на будущее.": "Якщо категорію не знайду — запропоную вибрати й запамʼятаю слово на майбутнє.", "Не получилось разобрать 😕 Попробуйте иначе или напишите «?»": "Не вдалося розібрати 😕 Спробуйте інакше або напишіть «?»", "Быстрый ввод": "Швидке введення", "Траты, доходы и привычки одной строкой": "Витрати, доходи та звички одним рядком", "Закрыть": "Закрити", "Например: кофе 85": "Наприклад: кава 85", "Отправить": "Надіслати", "Привет! Напишите трату одной строкой — например,": "Привіт! Напишіть витрату одним рядком — наприклад,", "Я сам найду категорию и счёт. Справка — «?»": "Я сам знайду категорію та рахунок. Довідка — «?»", "регулярный платёж": "регулярний платіж", "Оплачено · списано с «": "Оплачено · списано з «", "Регулярный платёж": "Регулярний платіж", "Сумма платежа": "Сума платежу", "Число месяца": "Число місяця", "Аренда, коммуналка, интернет… В этот день приложение спросит «Оплатили?» и спишет сумму со счёта. Если в месяце нет такого числа — платёж будет в последний день.": "Оренда, комуналка, інтернет… Цього дня застосунок запитає «Оплатили?» і спише суму з рахунку. Якщо в місяці немає такого числа — платіж буде в останній день.", "Перенести": "Перенести", "В этот раз не платим": "Цього разу не платимо", "Ждёт оплаты": "Чекає оплати", "Перенести платёж": "Перенести платіж", "был запланирован на": "був запланований на", "Выберите новую дату — в этот день приложение снова спросит об оплате.": "Виберіть нову дату — цього дня застосунок знову запитає про оплату.", "Списать со счёта": "Списати з рахунку", "Не списывать со счёта": "Не списувати з рахунку", "Нет счёта в этой валюте — платёж отметится, но баланс не изменится.": "Немає рахунку в цій валюті — платіж відмітиться, але баланс не зміниться.", "Платёж за": "Платіж за", "перенесён на": "перенесено на", "Проверьте сумму — она спишется с выбранного счёта.": "Перевірте суму — її буде списано з вибраного рахунку.", "Сегодня день оплаты": "Сьогодні день оплати", "Платёж был": "Платіж був", "оплатили?": "оплатили?", "Платёж": "Платіж", "Подтвердите оплату": "Підтвердіть оплату", "Скоро платёж": "Скоро платіж", "Регулярно": "Регулярно", "-го числа": "-го числа", "Следующий платёж": "Наступний платіж", "Укажите сумму платежа": "Вкажіть суму платежу", "Число месяца — от 1 до 31": "Число місяця — від 1 до 31", "Отмечено: в этот раз не платим": "Відмічено: цього разу не платимо"});
-  Object.assign(I18N.en, {"Счёт":"Account","не найден — использован основной":"not found — the main one is used"});
-  Object.assign(I18N.uk, {"Счёт":"Рахунок","не найден — использован основной":"не знайдено — використано основний"});
-  Object.assign(I18N.en, {"Это не ИИ": "This is not AI", "Простой помощник по шаблону: понимает только короткие записи вида «название сумма». Вопросы и обычный текст он не поймёт.": "A simple template helper: it only understands short entries like «name amount». It won't understand questions or regular text.", "Напишите трату одной строкой — например,": "Type a spending in one line — for example,", "Подсказки появятся прямо над полем ввода, справка — «?»": "Hints will appear right above the input; help — «?»", "Очистить историю": "Clear history", "расход": "expense", "подкатегория": "subcategory", "привычка": "habit", "Что можно написать": "What you can type", "название": "name", "сумма": "amount", "или дата, например 28.09": "or a date, e.g. 28.09", "счёт": "account", "списать с конкретного счёта": "take from a specific account", "отметить, для счётчика можно добавить число": "mark it; for a counter you can add a number", "Привычка": "Habit", "Категория": "Category", "не найдена — после отправки предложу выбрать": "not found — after sending I'll offer a choice", "Отметить привычку": "Mark habit", "Добавьте сумму, например": "Add an amount, e.g.", "Теперь напишите, на что — например,": "Now type what it's for — e.g.", "дата": "date"});
-  Object.assign(I18N.uk, {"Это не ИИ": "Це не ШІ", "Простой помощник по шаблону: понимает только короткие записи вида «название сумма». Вопросы и обычный текст он не поймёт.": "Простий помічник за шаблоном: розуміє лише короткі записи на кшталт «назва сума». Запитань і звичайного тексту він не зрозуміє.", "Напишите трату одной строкой — например,": "Напишіть витрату одним рядком — наприклад,", "Подсказки появятся прямо над полем ввода, справка — «?»": "Підказки зʼявляться просто над полем введення, довідка — «?»", "Очистить историю": "Очистити історію", "расход": "витрата", "подкатегория": "підкатегорія", "привычка": "звичка", "Что можно написать": "Що можна написати", "название": "назва", "сумма": "сума", "или дата, например 28.09": "або дата, наприклад 28.09", "счёт": "рахунок", "списать с конкретного счёта": "списати з конкретного рахунку", "отметить, для счётчика можно добавить число": "відмітити, для лічильника можна додати число", "Привычка": "Звичка", "Категория": "Категорія", "не найдена — после отправки предложу выбрать": "не знайдена — після надсилання запропоную вибрати", "Отметить привычку": "Відмітити звичку", "Добавьте сумму, например": "Додайте суму, наприклад", "Теперь напишите, на что — например,": "Тепер напишіть, на що — наприклад,", "дата": "дата"});
-  Object.assign(I18N.en, {"Показать суммы":"Show amounts","Скрыть суммы":"Hide amounts","Суммы скрыты":"Amounts hidden","Суммы показаны":"Amounts shown","Скрывать суммы при запуске":"Hide amounts on launch","Режим приватности: все суммы заменяются на «••••». Включается и выключается кнопкой с глазом в шапке.":"Privacy mode: all amounts are replaced with «••••». Turn it on and off with the eye button in the header."});
-  Object.assign(I18N.uk, {"Показать суммы":"Показати суми","Скрыть суммы":"Приховати суми","Суммы скрыты":"Суми приховано","Суммы показаны":"Суми показано","Скрывать суммы при запуске":"Приховувати суми під час запуску","Режим приватности: все суммы заменяются на «••••». Включается и выключается кнопкой с глазом в шапке.":"Режим приватності: усі суми замінюються на «••••». Вмикається й вимикається кнопкою з оком у шапці."});
+  // словари переводов лежат в папке languages/ (en.js, uk.js) и подгружаются до запуска приложения
+  var I18N_EXT = (typeof window!=='undefined' && window.LESSONCAL_I18N) || {};
+  var I18N = {en: I18N_EXT.en || {}, uk: I18N_EXT.uk || {}};
   // перевод: ключ — русская фраза
   function T(s){
     if(LANG==='ru') return s;
@@ -63,7 +52,7 @@
   var DOW_VALUES = [1,2,3,4,5,6,0];
   var STORAGE_KEY = 'lessoncal_boards_v1';
   var THEME_KEY = 'lessoncal_theme';
-  var MAX_MAIN_BALANCES = 3;
+  var MAX_MAIN_BALANCES = Infinity; // ограничения на число основных счетов больше нет
 
   // выбранная тема: 'dark' | 'light' | 'auto' (как в системе)
   var systemDark = (typeof window.matchMedia==='function') ? window.matchMedia('(prefers-color-scheme: dark)') : null;
@@ -100,6 +89,21 @@
     var m = document.querySelector('meta[name="theme-color"]');
     if(m) m.setAttribute('content', effectiveTheme(getTheme())==='light' ? '#f2f2f7' : '#252525');
   }
+  // анимации: 'full' | 'lite' (упрощённые, для слабых телефонов) | 'off'
+  var ANIM_KEY = 'lessoncal_anim';
+  function animMode(){
+    try{
+      var v = localStorage.getItem(ANIM_KEY);
+      if(v==='full' || v==='lite' || v==='off') return v;
+    }catch(e){}
+    // слабое устройство (мало памяти) — по умолчанию упрощённые
+    return (navigator.deviceMemory && navigator.deviceMemory <= 2) ? 'lite' : 'full';
+  }
+  function applyAnimMode(){
+    var m = animMode();
+    document.documentElement.classList.toggle('anim-lite', m==='lite');
+    document.documentElement.classList.toggle('anim-off', m==='off');
+  }
   var SUMMARY_KEY = 'lessoncal_summary_on_start';
   function getSummaryOnStart(){ try{ return localStorage.getItem(SUMMARY_KEY)==='1'; }catch(e){ return false; } }
 
@@ -120,14 +124,18 @@
     editing: null,
     transactionTarget: null,
     boardTypePickerOpen: false,
-    scheduleDay: (function(){ var jd = new Date().getDay(); return jd; })(),
+    scheduleDay: todayD().getDay(),
     scheduleTimeTarget: null,
     detailTarget: null,
     renewTarget: null,
     incomeTarget: null,
     pendingBackup: null,
+    onb: null,
     privacy: (function(){ try{ return localStorage.getItem('lessoncal_privacy')==='1' || localStorage.getItem('lessoncal_privacy_start')==='1'; }catch(e){ return false; } })(),
     subTarget: null,
+    balanceTarget: null,
+    calView: (function(){ try{ return localStorage.getItem('lessoncal_calview')==='week' ? 'week' : 'month'; }catch(e){ return 'month'; } })(),
+    weekStart: null,
     confirmCard: null
   };
 
@@ -135,7 +143,10 @@
   function pad(n){ return String(n).padStart(2,'0'); }
   function fmt(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
   function parseD(s){ var p=s.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]); }
-  function todayD(){ var n=new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()); }
+  function todayD(){
+    if(FAKE_TODAY){ var f = FAKE_TODAY.split('-'); return new Date(+f[0], +f[1]-1, +f[2]); }
+    var n=new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  }
   function addDays(d,n){ var r=new Date(d); r.setDate(r.getDate()+n); return r; }
   function startOfMonth(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
   var MONTH_NAMES_GEN = [T('января'),T('февраля'),T('марта'),T('апреля'),T('мая'),T('июня'),T('июля'),T('августа'),T('сентября'),T('октября'),T('ноября'),T('декабря')];
@@ -358,6 +369,8 @@
       if(typeof x.amount!=='number') x.amount = Number(x.amount)||0;
       x.currency = (CURRENCY_KEYS.indexOf(x.currency)!==-1) ? x.currency : DEFAULT_CURRENCY;
       if(typeof x.label!=='string') x.label = '';
+      if(!x.id) x.id = uid();
+      if(!Array.isArray(x.history)) x.history = [];
       if(x.kind!=='main' && x.kind!=='secondary') x.kind = 'main';
       if(x.kind==='main'){
         if(mainCount>=MAX_MAIN_BALANCES) x.kind = 'secondary'; else mainCount++;
@@ -600,7 +613,13 @@
     if(!state.boards.find(function(b){ return b.id===state.activeBoardId; })){
       state.activeBoardId = state.boards[0].id;
     }
-    if(getSummaryOnStart()) state.modal = 'summary';
+    if(!raw && !isOnboarded()){
+      state.onb = {i: 0, types: [], acc: {label: T('Карта'), amount: '', currency: DEFAULT_CURRENCY}, back: false};
+      state.modal = 'onboarding';
+    } else {
+      if(!isOnboarded()) markOnboarded(); // у тех, кто уже пользуется, приветствие не показываем
+      if(getSummaryOnStart()) state.modal = 'summary';
+    }
     render();
   }
   var saveVersion = 0;
@@ -946,7 +965,11 @@
       return {
         id: b.id,
         expenses: b.expenses.map(function(e){ return {id: e.id, name: e.name, currency: e.currency}; }),
-        balances: b.balances.map(function(x){ return {id: x.id, label: (x.label ? x.label+' · ' : '') + fmtMoney(x.amount, x.currency), currency: x.currency}; })
+        balances: b.balances.map(function(x){
+          var rates = {};
+          CURRENCY_KEYS.forEach(function(c){ var r = getRate(b, c, x.currency); if(r!==null) rates[c] = r; });
+          return {id: x.id, label: balLabel(x), currency: x.currency, rates: rates};
+        })
       };
     });
     return '<div class="fin-box" data-fin="'+escapeHtml(JSON.stringify({boards: data, link: link, subjName: defaultName}))+'">'+
@@ -1775,10 +1798,13 @@
     return best;
   }
 
+  // «не менять баланс»: сокращения на всех языках работают всегда
+  var Q_NOBAL = ['нмб','dcb','нзб'];
+  var Q_NOBAL_PHRASE = /не\s+менять\s+баланс|не\s+змінювати\s+баланс|don'?t\s+change\s+balance|без\s+баланса|без\s+балансу|no\s+balance/gi;
   function qParse(text){
     var raw = String(text||'').trim();
-    var res = {raw: raw, amount: null, sign: 0, currency: null, date: null, dateWord: '', words: [], rawWords: []};
-    var toks = raw.replace(/([0-9])(₴|\$|€|грн|uah|usd|eur|pln|zł)/gi, '$1 $2').replace(/(₴|\$|€)([0-9])/g, '$1 $2').split(/\s+/).filter(Boolean);
+    var res = {raw: raw, amount: null, sign: 0, currency: null, date: null, dateWord: '', words: [], rawWords: [], noBalance: false};
+    var toks = raw.replace(Q_NOBAL_PHRASE, ' нмб ').replace(/([0-9])(₴|\$|€|грн|uah|usd|eur|pln|zł)/gi, '$1 $2').replace(/(₴|\$|€)([0-9])/g, '$1 $2').split(/\s+/).filter(Boolean);
     var t = todayD();
     toks.forEach(function(orig){
       var tok = orig.toLowerCase();
@@ -1807,6 +1833,7 @@
       var cur = qCurrency(tok);
       if(cur && !res.currency){ res.currency = cur; return; }
       if(Q_WORDS.income.indexOf(nt)!==-1){ res.sign = 1; return; }
+      if(Q_NOBAL.indexOf(nt)!==-1){ res.noBalance = true; return; }
       if(nt) { res.words.push(nt); res.rawWords.push(orig.replace(/[«»"']/g,'')); }
     });
     if(!res.date){ res.date = fmt(t); res.dateWord = ''; }
@@ -1820,26 +1847,33 @@
     return list;
   }
   // найти и «вынуть» из слов название счёта
-  function qTakeAccount(p, board, currency){
+  function qTakeAccount(p, board, currency, mainOnly){
     var best = null, bestSc = 0, bestIdx = -1;
+    var usable = function(bal){ return !currency || getRate(board, currency, bal.currency)!==null; };
+    // второстепенный счёт узнаём, но для трат не используем
+    var pick = function(bal){
+      if(mainOnly && bal.kind!=='main'){ p.accountSecondary = bal.label; return null; }
+      return bal;
+    };
     board.balances.forEach(function(bal){
-      if(!bal.label || bal.currency!==currency) return;
+      if(!bal.label || !usable(bal)) return;
       var lw = qWords(bal.label);
       p.words.forEach(function(w, i){
         lw.forEach(function(x){ var sc = qSimilar(w, x); if(sc>bestSc){ bestSc = sc; best = bal; bestIdx = i; } });
       });
     });
-    if(best && bestSc>=2){ p.words.splice(bestIdx, 1); p.rawWords.splice(bestIdx, 1); return best; }
+    if(best && bestSc>=2){ p.words.splice(bestIdx, 1); p.rawWords.splice(bestIdx, 1); return pick(best); }
     // синонимы: «cash» найдёт счёт «Наличные», «картка» — «Карта» и т.д.
     for(var i=0; i<p.words.length; i++){
       var grp = qAccGroup(p.words[i]);
       if(!grp) continue;
-      var bal = board.balances.find(function(x){
-        return x.label && x.currency===currency && qWords(x.label).some(function(lw){ return qAccGroup(lw)===grp; });
+      var matches = board.balances.filter(function(x){
+        return x.label && usable(x) && qWords(x.label).some(function(lw){ return qAccGroup(lw)===grp; });
       });
+      var bal = (mainOnly ? matches.find(function(x){ return x.kind==='main'; }) : null) || matches[0];
       var raw = p.rawWords[i];
       p.words.splice(i, 1); p.rawWords.splice(i, 1);
-      if(bal) return bal;
+      if(bal) return pick(bal);
       p.accountMiss = raw; // слово про счёт есть, но такого счёта нет
       return null;
     }
@@ -1857,13 +1891,14 @@
     return null;
   }
   // счёт по умолчанию: для регулярного платежа — его счёт, иначе основной в этой валюте
-  function qDefaultAccount(board, item, currency){
+  function qDefaultAccount(board, item, currency, kind){
+    var spending = kind!=='income';
     if(item.recurring && item.recurring.balanceId){
       var b1 = board.balances.find(function(x){ return x.id===item.recurring.balanceId; });
-      if(b1) return b1;
+      if(b1 && (!spending || b1.kind==='main')) return b1;
     }
     return board.balances.find(function(x){ return x.currency===currency && x.kind==='main'; }) ||
-           board.balances.find(function(x){ return x.currency===currency; }) || null;
+           (spending ? null : board.balances.find(function(x){ return x.currency===currency; })) || null;
   }
   // лучшая категория расходов (или подкатегория) / доход для слов пользователя
   function qFindItem(words, kind, currency){
@@ -1909,7 +1944,7 @@
   function qRecord(target, p, kind, opts){
     opts = opts || {};
     var b = target.board, it = target.item;
-    var acc = opts.account || qDefaultAccount(b, it, it.currency);
+    var acc = p.noBalance ? null : (opts.account || qDefaultAccount(b, it, it.currency, kind));
     var found = addTransactionOn(b, kind, it.id, p.amount, acc ? acc.id : null, p.date, target.sub ? target.sub.id : null);
     var ref = {boardId: b.id, kind: kind, itemId: it.id, histId: lastHistoryId};
     if(opts.learn && p.words.length){
@@ -1925,9 +1960,15 @@
       T('Доска')+' «'+escapeHtml(b.name)+'» · '+(kind==='income' ? T('доходы') : T('расходы'))+(p.dateWord ? ' · '+escapeHtml(p.dateWord) : '')
     ];
     var bal = found && acc ? b.balances.find(function(x){ return x.id===acc.id; }) : null;
-    if(p.accountMiss) lines.push('⚠️ '+T('Счёт')+' «'+escapeHtml(p.accountMiss)+'» '+T('не найден — использован основной'));
-    if(bal) lines.push((kind==='income' ? T('Зачислено на') : T('Списано с'))+' «'+escapeHtml(bal.label || T('счёт'))+'» · '+T('осталось')+' '+fmtMoney2(bal.amount, bal.currency));
-    else lines.push('<span class="dim">'+T('Баланс не менялся — счёта в этой валюте нет')+'</span>');
+    if(p.accountSecondary && !p.noBalance) lines.push('⚠️ «'+escapeHtml(p.accountSecondary)+'» — '+T('второстепенный счёт. Траты из быстрого ввода списываются только с основных')+(bal ? '' : '.'));
+    if(p.accountMiss && !p.noBalance) lines.push('⚠️ '+T('Счёт')+' «'+escapeHtml(p.accountMiss)+'» '+T('не найден — использован основной'));
+    if(bal){
+      var hh = (it.history||[]).find(function(x){ return x.id===ref.histId; });
+      var conv = (bal.currency!==it.currency && hh && typeof hh.balAmount==='number') ? ' ('+fmtMoney2(hh.balAmount, bal.currency)+' '+T('по курсу')+')' : '';
+      lines.push((kind==='income' ? T('Зачислено на') : T('Списано с'))+' «'+escapeHtml(bal.label || T('счёт'))+'»'+conv+' · '+T('осталось')+' '+fmtMoney2(bal.amount, bal.currency));
+    }
+    else if(p.noBalance) lines.push('<span class="dim">'+T('Баланс не менялся')+' («'+T('нмб')+'»)</span>');
+    else lines.push('<span class="dim">'+(kind==='income' ? T('Баланс не менялся — счёта в этой валюте нет') : T('Баланс не менялся — нет основного счёта в этой валюте'))+'</span>');
     if(kind==='expense' && it.budget>0){
       var spent = spentInMonth(it, monthKeyOf(fmt(todayD())));
       var pct = Math.round(spent/it.budget*100);
@@ -1943,6 +1984,7 @@
   }
 
   function qHandle(text){
+    if(adminTryCode(text)) return;
     var p = qParse(text);
     var trimmed = String(text||'').trim();
     var low = qNorm(text);
@@ -1964,14 +2006,28 @@
     var fins = finBoards();
     if(!fins.length){ qBot(T('Сначала создайте доску «Финансы» — туда будут записываться траты и доходы.')); return; }
     var kind = p.sign>0 ? 'income' : 'expense';
+    if(kind==='income'){
+      var hit = qFindAccountAny(p);
+      if(hit){
+        var incT = hit.words.length ? qFindItem(hit.words, 'income', p.currency) : null;
+        if(incT && incT.board===hit.board){
+          p.words = hit.words; p.rawWords = hit.rawWords;
+          var ri = qRecord(incT, p, 'income', {account: hit.bal});
+          qBot(ri.html, ri.actions);
+        } else qTopUp(hit, p);
+        return;
+      }
+    }
     if(!p.words.length){
-      qBot(T('А на что? Добавьте название:')+' <b>'+(kind==='income' ? '+'+p.amount+' '+T('зарплата') : T('кофе')+' '+p.amount)+'</b>');
+      var firstBal = fins[0].balances[0];
+      qBot(kind==='income'
+        ? T('Куда зачислить? Добавьте счёт:')+' <b>+'+p.amount+' '+escapeHtml(firstBal ? qNorm(firstBal.label) || T('карта') : T('карта'))+'</b>'
+        : T('А на что? Добавьте название:')+' <b>'+T('кофе')+' '+p.amount+'</b>');
       return;
     }
     var target = qFindItem(p.words, kind, p.currency);
     if(target){
-      var acc = qTakeAccount(p, target.board, target.item.currency);
-      // если после «вынимания» счёта слов не осталось — категорию уже нашли
+      var acc = qTakeAccount(p, target.board, target.item.currency, kind==='expense');
       var r = qRecord(target, p, kind, {account: acc});
       qBot(r.html, r.actions);
       return;
@@ -1979,10 +2035,38 @@
     qAskCategory(p, kind);
   }
 
+  // найти счёт по словам на любой доске финансов
+  function qFindAccountAny(p){
+    var res = null;
+    finBoards().some(function(b){
+      var c = {words: p.words.slice(), rawWords: p.rawWords.slice()};
+      var bal = qTakeAccount(c, b, null);
+      if(bal){ res = {board: b, bal: bal, words: c.words, rawWords: c.rawWords}; return true; }
+      return false;
+    });
+    return res;
+  }
+  function qTopUp(hit, p){
+    var b = hit.board, bal = hit.bal, amount = p.amount;
+    if(p.currency && p.currency!==bal.currency){
+      var rate = getRate(b, p.currency, bal.currency);
+      if(rate===null){ qBot(T('Счёт')+' «'+escapeHtml(bal.label)+'» '+T('в другой валюте, а курса нет. Добавьте курс в «Курсы валют».')); return; }
+      amount = r2(amount*rate);
+    }
+    var note = hit.rawWords.join(' ');
+    var hid = topUpBalance(b, bal.id, amount, p.date, note);
+    qBot('✅ '+T('Готово')+'<div class="q-lines">'+
+      '<div><b>'+T('Пополнение')+' «'+escapeHtml(bal.label || T('счёт'))+'»</b> · <span class="q-pos">+'+fmtMoney2(amount, bal.currency)+'</span></div>'+
+      (note ? '<div>'+escapeHtml(note)+'</div>' : '')+
+      '<div>'+T('Баланс')+': '+fmtMoney2(bal.amount, bal.currency)+(p.dateWord ? ' · '+escapeHtml(p.dateWord) : '')+'</div>'+
+      '<div class="dim">'+T('Это не доход — в статистику не попадёт')+'</div></div>',
+      [{label: T('Отменить'), fn: function(){ deleteBalanceEntry(b, bal.id, hid); qBot('↩️ '+T('Отменено')); }}]);
+  }
+
   function qAskCategory(p, kind){
     var fb = finBoards()[0];
     var cur = p.currency || (fb.balances[0] ? fb.balances[0].currency : DEFAULT_CURRENCY);
-    var acc = qTakeAccount(p, fb, cur);
+    var acc = p.noBalance ? null : qTakeAccount(p, fb, cur, kind==='expense');
     if(!p.words.length){ qBot(T('А на что? Добавьте название:')+' <b>'+T('кофе')+' '+p.amount+'</b>'); return; }
     var list = (kind==='income' ? fb.income : fb.expenses).filter(function(x){ return x.currency===cur; });
     var name = qCap(p.rawWords.join(' '));
@@ -2041,8 +2125,10 @@
     qBot('<b>'+T('Как писать')+'</b><div class="q-lines">'+
       '<div><b>'+T('кофе 85')+'</b> — '+T('трата сегодня')+'</div>'+
       '<div><b>'+T('такси 200 вчера')+'</b> — '+T('трата за вчера (или дата: 28.09)')+'</div>'+
-      '<div><b>'+T('хлеб 30 наличные')+'</b> — '+T('с конкретного счёта, подкатегории тоже находятся')+'</div>'+
+      '<div><b>'+T('хлеб 30 карта')+'</b> — '+T('с конкретного счёта, подкатегории тоже находятся')+'</div>'+
 
+      '<div><b>'+T('кофе 85 нмб')+'</b> — '+T('записать трату, не меняя баланс')+' («'+T('нмб')+'» = '+T('не менять баланс')+')</div>'+
+      '<div><b>'+T('+500 карта')+'</b> — '+T('пополнить счёт')+'</div>'+
       '<div><b>'+T('вода')+'</b> / <b>'+T('вода 2')+'</b> — '+T('отметить привычку')+'</div>'+
       '</div><div class="q-note">'+T('Если категорию не найду — предложу выбрать, и запомню слово на будущее.')+'</div>');
   }
@@ -2091,7 +2177,9 @@
       html = '<div class="qs-sg-title">'+T('Что можно написать')+'</div>'+
         qRow('<b>'+T('название')+'</b> <b>'+T('сумма')+'</b>', T('трата сегодня')+' · '+T('кофе 85'), T('кофе 85'), 'set')+
         qRow('<b>'+T('название')+'</b> <b>'+T('сумма')+'</b> '+T('вчера'), T('или дата, например 28.09'), T('такси 200 вчера'), 'set')+
-        qRow('<b>'+T('название')+'</b> <b>'+T('сумма')+'</b> <b>'+T('счёт')+'</b>', T('списать с конкретного счёта'), T('хлеб 30 наличные'), 'set')+
+        qRow('<b>'+T('название')+'</b> <b>'+T('сумма')+'</b> <b>'+T('счёт')+'</b>', T('списать с конкретного счёта'), T('хлеб 30 карта'), 'set')+
+        qRow('<b>'+T('название')+'</b> <b>'+T('сумма')+'</b> '+T('нмб'), T('не менять баланс'), T('кофе 85 нмб'), 'set')+
+        qRow('<b>+'+T('сумма')+'</b> <b>'+T('счёт')+'</b>', T('пополнить счёт'), T('+500 карта'), 'set')+
         qRow('<b>'+T('привычка')+'</b>', T('отметить, для счётчика можно добавить число'), T('вода'), 'set');
       quick.suggest.innerHTML = html;
       quick.suggest.hidden = false;
@@ -2105,17 +2193,21 @@
 
     // 1) превью: что произойдёт после отправки
     var preview = '';
-    if(p.amount>0 && p.words.length){
+    var topHit = (p.sign>0 && p.amount>0) ? qFindAccountAny(p) : null;
+    if(topHit && !(topHit.words.length && qFindItem(topHit.words, 'income', p.currency))){
+      preview = '<span class="qs-sg-ok">↵</span> '+T('Пополнить')+' <b>«'+escapeHtml(topHit.bal.label)+'»</b> · +'+fmtMoney2(p.amount, p.currency || topHit.bal.currency);
+    } else if(p.amount>0 && p.words.length){
       var kind = p.sign>0 ? 'income' : 'expense';
       var pc = JSON.parse(JSON.stringify({w: p.words, r: p.rawWords}));
       var tp = {words: pc.w, rawWords: pc.r};
       var target = qFindItem(tp.words, kind, p.currency);
       if(target){
-        var acc = qTakeAccount(tp, target.board, target.item.currency) || qDefaultAccount(target.board, target.item, target.item.currency);
+        var acc = qTakeAccount(tp, target.board, target.item.currency, kind==='expense') || qDefaultAccount(target.board, target.item, target.item.currency, kind);
         preview = '<span class="qs-sg-ok">↵</span> <b>'+escapeHtml(target.item.name)+(target.sub ? ' › '+escapeHtml(target.sub.name) : '')+'</b> · '+
           (kind==='income' ? '+' : '−')+fmtMoney2(p.amount, target.item.currency)+
-          (acc ? ' · '+T('счёт')+' «'+escapeHtml(acc.label || T('счёт'))+'»' : '')+(p.dateWord ? ' · '+escapeHtml(p.dateWord) : '')+
-          (tp.accountMiss ? '<br><span class="qs-sg-warn">!</span> '+T('Счёт')+' «'+escapeHtml(tp.accountMiss)+'» '+T('не найден — использован основной') : '');
+          (p.noBalance ? ' · <i>'+T('баланс не меняется')+'</i>' : (acc ? ' · '+T('счёт')+' «'+escapeHtml(acc.label || T('счёт'))+'»' : ''))+(p.dateWord ? ' · '+escapeHtml(p.dateWord) : '')+
+          (tp.accountMiss ? '<br><span class="qs-sg-warn">!</span> '+T('Счёт')+' «'+escapeHtml(tp.accountMiss)+'» '+T('не найден — использован основной') : '')+
+          (tp.accountSecondary && !p.noBalance ? '<br><span class="qs-sg-warn">!</span> «'+escapeHtml(tp.accountSecondary)+'» — '+T('второстепенный, для трат используется основной') : '');
       } else {
         var hb = !p.sign ? qFindHabit(p.words) : null;
         if(hb && hb.habit.kind==='count') preview = '<span class="qs-sg-ok">↵</span> '+T('Привычка')+' <b>'+escapeHtml(hb.habit.name)+'</b> · +'+Math.round(p.amount);
@@ -2130,7 +2222,9 @@
       if(hb2) preview = '<span class="qs-sg-ok">↵</span> '+T('Отметить привычку')+' <b>'+escapeHtml(hb2.habit.name)+'</b>';
       else if(!partial) preview = '<span class="qs-sg-warn">…</span> '+T('Добавьте сумму, например')+' «'+escapeHtml(p.rawWords.join(' '))+' 120»';
     } else if(p.amount>0 && !p.words.length){
-      preview = '<span class="qs-sg-warn">…</span> '+T('Теперь напишите, на что — например,')+' «'+T('кофе')+' '+p.amount+'»';
+      preview = p.sign>0
+        ? '<span class="qs-sg-warn">…</span> '+T('Теперь выберите счёт — например,')+' «+'+p.amount+' '+T('карта')+'»'
+        : '<span class="qs-sg-warn">…</span> '+T('Теперь напишите, на что — например,')+' «'+T('кофе')+' '+p.amount+'»';
     }
     if(preview) html += '<div class="qs-sg-preview">'+preview+'</div>';
 
@@ -2149,18 +2243,25 @@
          .forEach(function(v){ add(escapeHtml(v.name), escapeHtml(v.sub), qNorm(v.name), 'replace'); });
       if(p.amount!==null){
         finBoards().forEach(function(b){ b.balances.forEach(function(x){
-          if(x.label && qNorm(x.label).indexOf(partial)===0 && qNorm(x.label)!==partial) add(escapeHtml(x.label), T('счёт'), qNorm(x.label), 'replace');
+          if(x.label && qNorm(x.label).indexOf(partial)===0 && qNorm(x.label)!==partial && (p.sign>0 || x.kind==='main')) add(escapeHtml(x.label), T('счёт'), qNorm(x.label), 'replace');
         }); });
         [T('вчера'), T('позавчера')].forEach(function(dw){ if(qNorm(dw).indexOf(partial)===0) add(escapeHtml(dw), T('дата'), dw, 'replace'); });
+        if(qNorm(T('нмб')).indexOf(partial)===0 && qNorm(T('нмб'))!==partial) add(escapeHtml(T('нмб')), T('не менять баланс'), T('нмб'), 'replace');
       }
+    } else if(p.sign>0 && p.amount>0 && !topHit && endsSpace){
+      // «+500 » — предложить счета для пополнения
+      finBoards().forEach(function(b){ b.balances.forEach(function(x){
+        if(x.label) add(escapeHtml(x.label), T('пополнить')+' · '+fmtMoney2(x.amount, x.currency), qNorm(x.label), 'append');
+      }); });
     } else if(p.amount>0 && p.words.length && endsSpace){
-      // после суммы: предложить дату и счёт
+      // после суммы: предложить дату, «нмб» и счёт
+      if(!p.noBalance && p.sign<=0) add(escapeHtml(T('нмб')), T('не менять баланс'), T('нмб'), 'append');
       if(!/вчера|вчора|yesterday|позавч|\d+[.\/]\d+/.test(qNorm(text))) add(escapeHtml(T('вчера')), T('дата'), T('вчера'), 'append');
       var shown = 0;
       var tw = qWords(text);
       var hasAcc = finBoards().some(function(b){ return b.balances.some(function(x){ return x.label && qWords(x.label).some(function(lw){ return tw.some(function(w){ return qSimilar(w, lw)>=2; }); }); }); });
       if(!hasAcc) finBoards().slice(0,1).forEach(function(b){ b.balances.forEach(function(x){
-        if(x.label && shown<3){ shown++; add(escapeHtml(x.label), T('счёт'), qNorm(x.label), 'append'); }
+        if(x.label && shown<3 && (p.sign>0 || x.kind==='main')){ shown++; add(escapeHtml(x.label), T('счёт'), qNorm(x.label), 'append'); }
       }); });
     }
     if(rows.length) html += rows.join('');
@@ -2210,7 +2311,7 @@
     try{ qHandle(v); }catch(e){ qBot(T('Не получилось разобрать 😕 Попробуйте иначе или напишите «?»')); }
   }
   function qExamples(){
-    return [T('кофе 85'), T('такси 200 вчера'), T('хлеб 30 наличные'), '?'];
+    return [T('кофе 85'), T('такси 200 вчера'), T('хлеб 30 карта'), '?'];
   }
   function ensureQuick(){
     if(quick.fab) return;
@@ -2219,7 +2320,7 @@
     fab.type = 'button';
     fab.setAttribute('aria-label', T('Быстрый ввод'));
     fab.innerHTML = '<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.2 3.6c-.5.4-1.3 0-1.3-.6V16A2.5 2.5 0 0 1 4 13.5z" fill="currentColor" opacity=".22"/><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.2 3.6c-.5.4-1.3 0-1.3-.6V16A2.5 2.5 0 0 1 4 13.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 6.5v6M9 9.5h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
-    fab.addEventListener('click', openQuick);
+    fab.addEventListener('click', function(){ openQuick(false); });
     document.body.appendChild(fab);
 
     var sheet = document.createElement('div');
@@ -2248,6 +2349,13 @@
     sheet.querySelector('.qs-backdrop').addEventListener('click', closeQuick);
     sheet.querySelector('.qs-close').addEventListener('click', closeQuick);
     sheet.querySelector('.qs-clear').addEventListener('click', qClear);
+    var qPanel = sheet.querySelector('.qs-panel');
+    attachSheetDrag(qPanel, function(){ sheet.classList.add('dragged'); closeQuick(); },
+      {gripOnly: true, gripHeight: 76, setFade: function(f, dur){
+        var bd = sheet.querySelector('.qs-backdrop');
+        if(bd) bd.style.transition = dur ? 'background-color '+dur+'ms ease' : 'none';
+        sheet.style.setProperty('--bd', f.toFixed(3));
+      }});
     quick.suggest = sheet.querySelector('.qs-suggest');
     quick.input.addEventListener('input', qUpdateSuggest);
     quick.input.addEventListener('focus', qUpdateSuggest);
@@ -2282,11 +2390,16 @@
       window.visualViewport.addEventListener('scroll', fit);
     }
   }
-  function openQuick(){
+  function openQuick(force){
     ensureQuick();
     if(quick.open) return;
     quick.open = true;
-    quick.sheet.classList.remove('closing');
+    quick.sheet.classList.toggle('force', !!force);
+    quick.sheet.classList.remove('closing', 'dragged');
+    var qp0 = quick.sheet.querySelector('.qs-panel');
+    qp0.style.transform = ''; qp0.style.transition = '';
+    qp0.classList.remove('sheet-dragging', 'sheet-dismiss');
+    quick.sheet.style.removeProperty('--bd');
     quick.sheet.classList.add('open');
     document.documentElement.classList.add('quick-open');
     if(!quick.greeted) qGreet();
@@ -2299,8 +2412,564 @@
     quick.sheet.classList.add('closing');
     document.documentElement.classList.remove('quick-open');
     setTimeout(function(){
-      if(!quick.open){ quick.sheet.classList.remove('open','closing'); quick.sheet.querySelector('.qs-panel').style.bottom = ''; }
+      if(!quick.open){
+        quick.sheet.classList.remove('open','closing','dragged','force');
+        quick.sheet.style.removeProperty('--bd');
+        var qbd = quick.sheet.querySelector('.qs-backdrop'); if(qbd) qbd.style.transition = '';
+        var qp = quick.sheet.querySelector('.qs-panel');
+        qp.style.bottom = ''; qp.style.transform = ''; qp.style.transition = '';
+        qp.classList.remove('sheet-dragging', 'sheet-dismiss');
+      }
     }, 300);
+  }
+
+  // =====================================================================
+  // ---------- ЕЖЕДНЕВНЫЙ ОГОНЁК (серия входов, как в Duolingo) ----------
+  // =====================================================================
+  var STREAK_KEY = 'lessoncal_streak';
+  function loadStreak(){
+    var d;
+    try{ d = JSON.parse(localStorage.getItem(STREAK_KEY) || '{}') || {}; }catch(e){ d = {}; }
+    if(!Array.isArray(d.days)) d.days = [];
+    d.days = d.days.filter(isValidDs).sort();
+    d.best = Math.max(0, parseInt(d.best, 10) || 0);
+    return d;
+  }
+  function saveStreak(d){ try{ localStorage.setItem(STREAK_KEY, JSON.stringify(d)); }catch(e){} }
+  function streakHas(d, ds){ return d.days.indexOf(ds)!==-1; }
+  // текущая серия: подряд до сегодня (или до вчера, если сегодня ещё не отмечено)
+  function streakCount(d){
+    var t = todayD();
+    var cur = streakHas(d, fmt(t)) ? t : addDays(t, -1);
+    var n = 0;
+    while(streakHas(d, fmt(cur))){ n++; cur = addDays(cur, -1); }
+    return n;
+  }
+  function streakLitToday(d){ return streakHas(d, fmt(todayD())); }
+  function streakDaysWord(n){ return plural(n, T('день подряд'), T('дня подряд'), T('дней подряд')); }
+
+  function flameSvg(cls){
+    var id = 'fg' + Math.random().toString(36).slice(2, 7);
+    var outer = 'M50 4C57 21 77 33 80 61C83 92 66 114 50 116C33 115 17 101 19 74C20 58 29 49 34 37C37 50 43 55 46 57C44 39 44 22 50 4Z';
+    var inner = 'M50 54C56 66 66 73 66 89C66 104 58 112 50 112C41 112 34 104 35 91C36 81 42 77 44 69C46 75 48 77 50 79C49 71 48 63 50 54Z';
+    return '<svg class="flame '+(cls||'')+'" viewBox="0 0 100 120" aria-hidden="true">'+
+      '<defs>'+
+        '<linearGradient id="'+id+'o" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb340"/><stop offset=".55" stop-color="#ff7a1a"/><stop offset="1" stop-color="#ff3b30"/></linearGradient>'+
+        '<linearGradient id="'+id+'i" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff7c2"/><stop offset="1" stop-color="#ffd60a"/></linearGradient>'+
+      '</defs>'+
+      '<g class="fl-off"><path d="'+outer+'"/><path class="fl-in" d="'+inner+'"/></g>'+
+      '<g class="fl-on"><path d="'+outer+'" fill="url(#'+id+'o)"/><path d="'+inner+'" fill="url(#'+id+'i)"/></g>'+
+    '</svg>';
+  }
+  function streakWeekHtml(d, big){
+    var t = todayD(), todayStr = fmt(t), mon = parseD(weekKey(t));
+    var out = '';
+    for(var i=0;i<7;i++){
+      var ds = fmt(addDays(mon, i));
+      var cls = streakHas(d, ds) ? 'on' : (ds===todayStr ? 'today' : (ds<todayStr ? 'miss' : 'future'));
+      out += '<span class="sw-day '+cls+'"'+(ds===todayStr?' data-today="1"':'')+'>'+
+        (big ? '<span class="sw-lbl">'+DOW_LABELS[i]+'</span>' : '')+
+        '<i>'+(big ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>' : '')+'</i></span>';
+    }
+    return '<div class="sw-row'+(big?' big':'')+'">'+out+'</div>';
+  }
+  // плашка внизу каждой доски
+  function renderStreakBar(){
+    var d = loadStreak(), n = streakCount(d), lit = streakLitToday(d);
+    var text = lit
+      ? '<b>'+n+'</b> '+streakDaysWord(n)
+      : (n>0 ? T('Не потеряйте серию!')+' <b>'+n+'</b> '+streakDaysWord(n) : T('Зажгите огонёк на сегодня'));
+    return '<button type="button" class="streak-bar'+(lit?' lit':' pending')+'" data-act="open-streak">'+
+      '<span class="sb-flame">'+flameSvg(lit?'is-lit':'')+'</span>'+
+      '<span class="sb-text"><span class="sb-main">'+text+'</span>'+
+        '<span class="sb-sub">'+(lit ? T('Сегодня огонёк уже горит') : T('Нажмите и смахните вверх'))+'</span></span>'+
+      streakWeekHtml(d, false)+
+      '<span class="sb-chev">›</span>'+
+    '</button>';
+  }
+  function renderStreakModal(){
+    var d = loadStreak(), n = streakCount(d), lit = streakLitToday(d);
+    var free = streakFree();
+    var sparks = '';
+    for(var i=0;i<14;i++){
+      var a = Math.round(i*360/14 + (i%2 ? 9 : -6));
+      sparks += '<i style="--a:'+a+'deg;--d:'+(70 + (i*37)%46)+'px;--s:'+(0.6 + (i%4)*0.18).toFixed(2)+';--dl:'+((i%5)*0.03).toFixed(2)+'s"></i>';
+    }
+    return '<div class="overlay"><div class="modal streak-modal" data-stop="1">'+
+      '<button class="close-x" data-act="close-modal">✕</button>'+
+      '<div class="st-stage'+(lit?' lit':'')+'" id="st-stage" style="--p:'+(lit?1:0)+'">'+
+        '<div class="st-glow"></div>'+
+        '<div class="st-sparks">'+sparks+'</div>'+
+        flameSvg('st-flame')+
+      '</div>'+
+      '<div class="st-count" id="st-count"><span class="st-num cur">'+n+'</span></div>'+
+      '<div class="st-label" id="st-label">'+streakDaysWord(n)+'</div>'+
+      streakWeekHtml(d, true)+
+      ((lit && !free)
+        ? '<div class="st-done">'+T('Сегодня огонёк уже горит. Возвращайтесь завтра, чтобы продолжить серию!')+'</div>'
+        : '<div class="st-swipe" id="st-swipe" data-nodrag="1">'+
+            '<div class="st-track"><div class="st-trail"></div>'+
+              '<button type="button" class="st-knob" id="st-knob" aria-label="'+T('Зажечь огонёк')+'">'+
+                '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V6M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'+
+              '</button></div>'+
+            '<div class="st-hint">'+T('Смахните вверх, чтобы зажечь огонёк')+'</div>'+
+          '</div>'+
+          '<div class="st-done hidden" id="st-done">'+T('Отлично! Возвращайтесь завтра, чтобы продолжить серию.')+'</div>')+
+      '<div class="st-stats">'+
+        '<div><span>'+T('Рекорд')+'</span><b id="st-best">'+Math.max(d.best, n)+'</b></div>'+
+        '<div><span>'+T('Всего дней')+'</span><b id="st-total">'+d.days.length+'</b></div>'+
+      '</div>'+
+    '</div></div>';
+  }
+  function igniteStreak(){
+    var d = loadStreak();
+    var free = streakFree();
+    if(streakLitToday(d) && !free) return;
+    var before = streakCount(d);
+    if(!streakLitToday(d)) d.days.push(fmt(todayD()));
+    else {
+      // свободный режим: удлиняем серию на день назад
+      var first = addDays(todayD(), -(before-1));
+      while(streakHas(d, fmt(first))) first = addDays(first, -1);
+      d.days.push(fmt(first));
+      d.days.sort();
+    }
+    var after = streakCount(d);
+    d.best = Math.max(d.best, after);
+    saveStreak(d);
+    var stage = document.getElementById('st-stage');
+    if(stage){
+      stage.style.setProperty('--p', '1');
+      stage.classList.add('lit', 'igniting');
+    }
+    if(navigator.vibrate){ try{ navigator.vibrate([18, 40, 28]); }catch(e){} }
+    // счётчик «прокручивается» на новое число
+    var cnt = document.getElementById('st-count');
+    if(cnt){
+      cnt.innerHTML = '<span class="st-num old">'+before+'</span><span class="st-num new">'+after+'</span>';
+      cnt.classList.add('roll');
+    }
+    var lbl = document.getElementById('st-label');
+    if(lbl) lbl.textContent = (before===0 && d.days.length>1 ? T('Новая серия!')+' ' : '') + streakDaysWord(after);
+    var day = document.querySelector('.streak-modal .sw-day[data-today]');
+    if(day){ day.classList.remove('today'); day.classList.add('on', 'pop'); }
+    var sw = document.getElementById('st-swipe');
+    if(sw) sw.classList.add('gone');
+    var done = document.getElementById('st-done');
+    if(done) done.classList.remove('hidden');
+    var best = document.getElementById('st-best'); if(best) best.textContent = d.best;
+    var tot = document.getElementById('st-total'); if(tot) tot.textContent = d.days.length;
+    if(free) setTimeout(function(){ if(state.modal==='streak') render(); }, 1800);
+  }
+  // жест «смахнуть вверх» на ручке
+  function wireStreakSwipe(){
+    var knob = document.getElementById('st-knob');
+    var stage = document.getElementById('st-stage');
+    if(!knob || !stage) return;
+    var track = knob.parentElement, trail = track.querySelector('.st-trail');
+    var startY = 0, dy = 0, active = false, maxUp = 1;
+    var setP = function(p){
+      stage.style.setProperty('--p', p.toFixed(3));
+      knob.style.transform = 'translateY('+(-p*maxUp)+'px)';
+      trail.style.height = (p*maxUp + 26)+'px';
+    };
+    knob.addEventListener('pointerdown', function(e){
+      active = true; startY = e.clientY; dy = 0;
+      maxUp = track.clientHeight - knob.offsetHeight - 8;
+      knob.setPointerCapture && knob.setPointerCapture(e.pointerId);
+      knob.style.transition = 'none'; trail.style.transition = 'none'; stage.style.transition = 'none';
+      track.classList.add('active');
+      e.preventDefault();
+    });
+    knob.addEventListener('pointermove', function(e){
+      if(!active) return;
+      dy = Math.max(0, startY - e.clientY);
+      setP(Math.min(1, dy / maxUp));
+    });
+    var end = function(){
+      if(!active) return;
+      active = false;
+      track.classList.remove('active');
+      var p = Math.min(1, dy / maxUp);
+      if(p >= 0.72){
+        knob.style.transition = 'transform .25s cubic-bezier(.32,.72,0,1)';
+        setP(1);
+        igniteStreak();
+      } else {
+        knob.style.transition = 'transform .45s cubic-bezier(.32,.72,0,1)';
+        trail.style.transition = 'height .45s cubic-bezier(.32,.72,0,1)';
+        stage.style.transition = '--p .45s';
+        setP(0);
+        if(dy < 6){ track.classList.remove('nudge'); void track.offsetWidth; track.classList.add('nudge'); }
+      }
+    };
+    knob.addEventListener('pointerup', end);
+    knob.addEventListener('pointercancel', end);
+    // с клавиатуры: Enter / пробел
+    knob.addEventListener('keydown', function(e){
+      if(e.key==='Enter' || e.key===' '){ e.preventDefault(); setP(1); igniteStreak(); }
+    });
+  }
+
+  // =====================================================================
+  // ---------- АДМИН-ПАНЕЛЬ (для тестирования; работает только на этом устройстве) ----------
+  // Вход: 50 нажатий на версию в настройках → в быстром вводе «admin.give.50».
+  // Это не защита (код открыт), а скрытое меню для разработчиков.
+  // =====================================================================
+  var ADMIN_KEY = 'lessoncal_admin', FAKE_KEY = 'lessoncal_fake_today', STREAK_FREE_KEY = 'lessoncal_streak_free';
+  var APP_VERSION = '2.0';
+  function isAdmin(){ try{ return localStorage.getItem(ADMIN_KEY)==='1'; }catch(e){ return false; } }
+  function streakFree(){ try{ return isAdmin() && localStorage.getItem(STREAK_FREE_KEY)==='1'; }catch(e){ return false; } }
+  var adminGate = {taps: 0, last: 0, armedAt: 0};
+  function versionTap(el){
+    var now = Date.now();
+    if(now - adminGate.last > 2500) adminGate.taps = 0;
+    adminGate.last = now;
+    adminGate.taps++;
+    if(el){ el.classList.remove('tap'); void el.offsetWidth; el.classList.add('tap'); }
+    if(adminGate.taps >= 50){
+      adminGate.taps = 0;
+      adminGate.armedAt = now;
+      if(navigator.vibrate){ try{ navigator.vibrate([10, 50, 10]); }catch(e){} }
+      state.modal = null; render();
+      openQuick(true);
+    }
+  }
+  function adminTryCode(text){
+    if(String(text||'').trim().toLowerCase()!=='admin.give.50') return false;
+    if(!isAdmin() && !(adminGate.armedAt && Date.now()-adminGate.armedAt < 120000)) return false;
+    try{ localStorage.setItem(ADMIN_KEY, '1'); }catch(e){}
+    adminGate.armedAt = 0;
+    qBot('🛠 <b>Админ-режим включён</b><div class="q-lines"><div>Панель доступна в настройках и по этой же команде.</div></div>',
+      [{label: 'Открыть панель', primary: true, fn: function(){ closeQuick(); state.modal = 'admin'; state.menuOpen = false; render(); }}]);
+    return true;
+  }
+  function setFakeToday(ds){
+    FAKE_TODAY = (ds && isValidDs(ds)) ? ds : '';
+    try{ if(FAKE_TODAY) localStorage.setItem(FAKE_KEY, FAKE_TODAY); else localStorage.removeItem(FAKE_KEY); }catch(e){}
+    state.viewDate = startOfMonth(todayD());
+    state.weekStart = null;
+    state.scheduleDay = todayD().getDay();
+    render();
+  }
+  function setStreakTo(n, includeToday, best){
+    var d = loadStreak(), t = todayD();
+    var end = includeToday ? t : addDays(t, -1);
+    d.days = [];
+    for(var i=n-1; i>=0; i--) d.days.push(fmt(addDays(end, -i)));
+    d.best = Math.max(n, best||0);
+    saveStreak(d);
+  }
+
+  // ---------- шаблоны тестовых досок ----------
+  function tplRand(seed){ var x = seed; return function(){ x = (x*9301 + 49297) % 233280; return x/233280; }; }
+  function tplDs(n){ return fmt(addDays(todayD(), n)); }
+  function tplMonthDay(back, day){ var t = todayD(); var d = new Date(t.getFullYear(), t.getMonth()-back, 1); return fmt(new Date(d.getFullYear(), d.getMonth(), Math.min(day, daysInMonthOf(d.getFullYear(), d.getMonth())))); }
+  function tplFinance(){
+    var b = newBoard('🧪 Финансы', 'finance'); b.test = true;
+    var t = todayD(), rnd = tplRand(7);
+    var card = {id: uid(), label: 'Карта', amount: 25000, currency: 'UAH', kind: 'main', history: []};
+    var usd = {id: uid(), label: 'Доллары', amount: 300, currency: 'USD', kind: 'main', history: []};
+    var cash = {id: uid(), label: 'Наличные', amount: 1500, currency: 'UAH', kind: 'secondary', history: []};
+    b.balances = [card, usd, cash];
+    b.rates = {USD_UAH: 41.5, EUR_UAH: 45};
+    var payDay = Math.min(t.getDate(), 28);
+    var salary = {id: uid(), name: 'Зарплата', color: 'sage', amount: 40000, currency: 'UAH', scheduleType: 'monthly', dayOfMonth: payDay,
+      history: [], confirmed: {}, postponed: {}, skipped: [], createdAt: fmt(t)};
+    for(var k=1;k<=5;k++){ var od = tplMonthDay(k, payDay); salary.history.push({id: uid(), date: od, amount: 40000, balanceId: card.id, occ: od, noCard: true}); salary.confirmed[od] = salary.history[salary.history.length-1].id; }
+    var freelance = {id: uid(), name: 'Фриланс', color: 'sky', amount: 0, currency: 'UAH', scheduleType: 'once', date: tplDs(5), dayOfMonth: 1,
+      history: [{id: uid(), date: tplMonthDay(1, 14), amount: 6500}, {id: uid(), date: tplMonthDay(3, 9), amount: 4200}], confirmed: {}, postponed: {}, skipped: [], createdAt: fmt(t)};
+    freelance.amount = 10700;
+    b.income = [salary, freelance];
+    function exp(name, color, budget, subs, perMonth, curDays){
+      var e = {id: uid(), name: name, color: color, amount: 0, currency: 'UAH', budget: budget, subs: [], history: [], aliases: [], recurring: null};
+      e.subs = subs.map(function(n){ return {id: uid(), name: n, amount: 0}; });
+      for(var m=5; m>=0; m--){
+        var cnt = m===0 ? curDays : 4;
+        for(var j=0;j<cnt;j++){
+          var day = m===0 ? Math.max(1, t.getDate() - j*2) : 3 + j*6;
+          var date = m===0 ? fmt(addDays(t, -j*2)) : tplMonthDay(m, day);
+          var a = Math.round(perMonth/4 * (0.6 + rnd()*0.8));
+          var sb = e.subs.length ? e.subs[j % e.subs.length] : null;
+          if(sb) sb.amount += a;
+          e.history.push({id: uid(), date: date, amount: a, balanceId: card.id, balAmount: a, subId: sb ? sb.id : null, subName: sb ? sb.name : ''});
+          e.amount += a;
+        }
+      }
+      return e;
+    }
+    var shop = exp('Магазин', 'amber', 6000, ['Хлеб', 'Молоко', 'Овощи'], 6200, 5);
+    var cafe = exp('Кафе', 'clay', 1500, [], 1900, 4);
+    var taxi = exp('Такси', 'lilac', 0, [], 900, 2);
+    var rent = {id: uid(), name: 'Аренда', color: 'rose', amount: 45000, currency: 'UAH', budget: 0, subs: [], history: [], aliases: [],
+      recurring: {scheduleType: 'monthly', amount: 9000, dayOfMonth: t.getDate(), balanceId: card.id, confirmed: {}, postponed: {}, skipped: [], createdAt: fmt(t)}};
+    for(var r=1;r<=5;r++) rent.history.push({id: uid(), date: tplMonthDay(r, t.getDate()), amount: 9000, balanceId: card.id, balAmount: 9000});
+    var util = {id: uid(), name: 'Коммуналка', color: 'aqua', amount: 0, currency: 'UAH', budget: 0, subs: [], history: [], aliases: ['свет', 'газ'],
+      recurring: {scheduleType: 'monthly', amount: 1800, dayOfMonth: addDays(t, 2).getDate(), balanceId: card.id, confirmed: {}, postponed: {}, skipped: [], createdAt: fmt(t)}};
+    b.expenses = [shop, cafe, taxi, rent, util];
+    return b;
+  }
+  function tplSubs(fin){
+    var b = newBoard('🧪 Подписки', 'subs'); b.test = true;
+    var link = fin ? {boardId: fin.id, expenseId: '', balanceId: fin.balances[0].id} : null;
+    function sub(name, color, amount, cur, period, start, extra){
+      var x = {id: uid(), name: name, color: color, amount: amount, currency: cur, period: period, startDate: start, active: true,
+        paid: {}, skipped: [], history: [], createdAt: tplDs(-1), financeLink: link};
+      for(var k in (extra||{})) x[k] = extra[k];
+      return x;
+    }
+    var gpt = sub('ChatGPT', 'sage', 20, 'USD', 'month', tplDs(-10));
+    var paidOcc = tplDs(-10);
+    gpt.createdAt = tplDs(-40);
+    gpt.history.push({id: uid(), orig: paidOcc, date: paidOcc, amount: 20, finance: null});
+    gpt.paid[paidOcc] = gpt.history[0].id;
+    b.subs = [
+      sub('Netflix', 'rose', 299, 'UAH', 'month', tplDs(0)),
+      sub('Spotify', 'sage', 199, 'UAH', 'month', tplDs(2)),
+      gpt,
+      sub('iCloud', 'sky', 99, 'UAH', 'year', tplDs(-200)),
+      sub('Duolingo', 'olive', 7, 'USD', 'month', tplDs(-5), {active: false})
+    ];
+    return b;
+  }
+  function tplHabits(){
+    var b = newBoard('🧪 Привычки', 'habits'); b.test = true;
+    var t = todayD(), rnd = tplRand(3);
+    function hb(name, color, kind, target, unit, days){ return {id: uid(), name: name, color: color, kind: kind, target: target, unit: unit, days: days || DOW_VALUES.slice(), log: {}, createdAt: tplDs(-30)}; }
+    var water = hb('Вода', 'aqua', 'count', 8, 'стаканов');
+    var sport = hb('Спорт', 'clay', 'check', 1, '', [1, 3, 5]);
+    var read = hb('Чтение', 'lilac', 'count', 20, 'мин');
+    for(var i=1;i<=30;i++){
+      var ds = fmt(addDays(t, -i)), dow = addDays(t, -i).getDay();
+      if(i<=12 || rnd()>0.35) water.log[ds] = i===5 ? 5 : 8;
+      if(sport.days.indexOf(dow)!==-1 && (i<=14 || rnd()>0.4)) sport.log[ds] = 1;
+      if(rnd()>0.3) read.log[ds] = Math.round(10 + rnd()*15);
+    }
+    water.log[fmt(t)] = 3;
+    b.habits = [water, sport, read];
+    return b;
+  }
+  function tplLessons(){
+    var b = newBoard('🧪 Занятия', 'lessons'); b.test = true;
+    var en = {id: uid(), name: 'Английский', color: 'sky', days: [1, 3, 5], startDate: tplDs(-60), planType: 'dynamic', total: 0, paidUntil: '', timeStart: '16:00', timeEnd: '17:00', cancelled: [], rescheduled: {}, payments: []};
+    var swim = {id: uid(), name: 'Плавание', color: 'sage', days: [2, 4], startDate: tplDs(-40), planType: 'static', total: 0, paidUntil: tplDs(2), timeStart: '08:00', timeEnd: '09:00', cancelled: [], rescheduled: {}, payments: []};
+    var guitar = {id: uid(), name: 'Гитара', color: 'clay', days: [6], startDate: tplDs(-20), planType: 'dynamic', total: 16, paidUntil: '', timeStart: '12:00', timeEnd: '13:00', cancelled: [], rescheduled: {}, payments: [{id: uid(), date: tplDs(-20), amount: 3200, currency: 'UAH', lessons: 16, until: '', prevUntil: '', finance: null}]};
+    b.subjects = [en, swim, guitar];
+    normalizeBoard(b);
+    en.total = Math.max(1, en.total - remaining(en) + 1); // остался ровно 1 урок — сработает напоминание
+    return b;
+  }
+  function tplPlanner(){
+    var b = newBoard('🧪 Задачи', 'planner'); b.test = true;
+    var t = todayD(), dow = t.getDay();
+    function task(name, color, notes, times){ return {id: uid(), name: name, color: color, notes: notes, times: times}; }
+    function tm(day, s, e, extra){ var x = {id: uid(), day: day, date: '', timeStart: s, timeEnd: e, doneWeeks: []}; for(var k in (extra||{})) x[k] = extra[k]; return x; }
+    var wk = weekKey(t);
+    b.scheduleItems = [
+      task('Купить продукты', 'aqua', 'Молоко, хлеб, сыр', [tm(dow, '10:00', '11:00'), tm((dow+3)%7, '18:00', '19:00')]),
+      task('Тренировка', 'clay', '', [tm(1, '07:00', '08:00', {doneWeeks: [wk]}), tm(3, '07:00', '08:00'), tm(5, '07:00', '08:00')]),
+      task('Позвонить маме', 'rose', '', [tm(addDays(t,1).getDay(), '', '', {date: tplDs(1)})]),
+      task('Очень длинное название задачи для проверки многоточия в неделе', 'lilac', 'Длинное описание, чтобы проверить кнопку «…»', [tm(dow, '14:00', '15:00')])
+    ];
+    return b;
+  }
+  function addTemplate(kind){
+    var made = [];
+    var fin = null;
+    if(kind==='finance' || kind==='all'){ fin = tplFinance(); made.push(fin); }
+    if(kind==='subs' || kind==='all'){
+      if(!fin) fin = state.boards.find(function(x){ return x.type==='finance' && x.test; }) || null;
+      made.push(tplSubs(fin));
+    }
+    if(kind==='habits' || kind==='all') made.push(tplHabits());
+    if(kind==='lessons' || kind==='all') made.push(tplLessons());
+    if(kind==='planner' || kind==='all') made.push(tplPlanner());
+    made.forEach(function(b){ normalizeBoard(b); state.boards.push(b); });
+    state.activeBoardId = made[0].id;
+    state.modal = null;
+    pendingAnim = 'enter';
+    showToast('Создано тестовых досок: '+made.length);
+    saveData();
+  }
+  function removeTestBoards(){
+    var n = state.boards.filter(function(b){ return b.test; }).length;
+    if(!n){ showToast('Тестовых досок нет'); return; }
+    withUndo('Удалено тестовых досок: '+n, function(){
+      state.boards = state.boards.filter(function(b){ return !b.test; });
+      if(!state.boards.length) state.boards.push(newBoard(T('Мой календарь'), 'lessons'));
+      if(!state.boards.some(function(b){ return b.id===state.activeBoardId; })) state.activeBoardId = state.boards[0].id;
+      saveData();
+    });
+  }
+
+  function renderAdminModal(){
+    var d = loadStreak(), n = streakCount(d), lit = streakLitToday(d);
+    var realToday = (function(){ var x = new Date(); return fmt(new Date(x.getFullYear(), x.getMonth(), x.getDate())); })();
+    var testCount = state.boards.filter(function(b){ return b.test; }).length;
+    var tplBtn = function(k, label){ return '<button type="button" class="btn small" data-act="admin-tpl" data-kind="'+k+'">'+label+'</button>'; };
+    return '<div class="overlay"><div class="modal narrow admin-modal" data-stop="1">'+
+      '<button class="close-x" data-act="close-modal">✕</button>'+
+      '<h3 class="display">🛠 Админ-панель</h3>'+
+      '<div class="sub">Инструменты для тестирования. Действуют только на этом устройстве.</div>'+
+
+      '<div class="adm-sec"><div class="adm-title">Тестовая дата</div>'+
+        '<div class="adm-note">'+(FAKE_TODAY ? 'Сейчас приложение думает, что сегодня <b>'+fmtHuman(FAKE_TODAY)+'</b>.' : 'Используется настоящая дата.')+'</div>'+
+        '<div class="adm-row">'+
+          '<input type="date" id="adm-date" value="'+(FAKE_TODAY || realToday)+'">'+
+          '<button type="button" class="btn small primary" data-act="admin-date-set">Применить</button>'+
+        '</div>'+
+        '<div class="adm-row">'+
+          '<button type="button" class="btn small" data-act="admin-date-shift" data-days="-1">−1 день</button>'+
+          '<button type="button" class="btn small" data-act="admin-date-shift" data-days="1">+1 день</button>'+
+          '<button type="button" class="btn small" data-act="admin-date-shift" data-days="7">+1 неделя</button>'+
+          '<button type="button" class="btn small" data-act="admin-date-shift" data-days="30">+30 дней</button>'+
+          (FAKE_TODAY ? '<button type="button" class="btn small danger" data-act="admin-date-reset">Сбросить</button>' : '')+
+        '</div>'+
+      '</div>'+
+
+      '<div class="adm-sec"><div class="adm-title">Огонёк</div>'+
+        '<div class="adm-note">Серия: <b>'+n+'</b> · рекорд: <b>'+Math.max(d.best, n)+'</b> · всего дней: <b>'+d.days.length+'</b> · сегодня '+(lit ? 'зажжён' : 'не зажжён')+'</div>'+
+        '<div class="adm-row">'+
+          '<input type="number" id="adm-streak" min="0" max="3650" value="'+n+'" style="width:96px;">'+
+          '<label class="adm-check"><input type="checkbox" id="adm-streak-today"'+(lit?' checked':'')+'> включая сегодня</label>'+
+          '<button type="button" class="btn small primary" data-act="admin-streak-set">Выставить</button>'+
+        '</div>'+
+        '<div class="adm-row">'+
+          '<button type="button" class="btn small danger" data-act="admin-streak-reset">Сбросить огонёк</button>'+
+        '</div>'+
+        '<label class="switch-label" style="margin-top:8px !important;"><span>Свободный режим — зажигать сколько угодно раз</span><input type="checkbox" class="switch" id="adm-streak-free"'+(streakFree()?' checked':'')+'></label>'+
+      '</div>'+
+
+      '<div class="adm-sec"><div class="adm-title">Шаблоны для тестов</div>'+
+        '<div class="adm-note">Создают готовые доски с данными на сегодняшнюю (или тестовую) дату: выплаты и платежи, которые ждут подтверждения, бюджеты, график за 6 месяцев, подписки, связанные с финансами, серии привычек.</div>'+
+        '<div class="adm-row wrap">'+
+          tplBtn('all', '✨ Всё сразу')+tplBtn('finance', 'Финансы')+tplBtn('subs', 'Подписки')+
+          tplBtn('habits', 'Привычки')+tplBtn('lessons', 'Занятия')+tplBtn('planner', 'Задачи')+
+        '</div>'+
+        (testCount ? '<div class="adm-row"><button type="button" class="btn small danger" data-act="admin-tpl-remove">Удалить тестовые доски ('+testCount+')</button></div>' : '')+
+      '</div>'+
+
+      '<div class="adm-sec"><button type="button" class="btn danger" style="width:100%;" data-act="admin-exit">Выйти из админ-режима</button>'+
+        '<div class="adm-note" style="margin-top:6px;">Тестовая дата и свободный режим огонька тоже выключатся.</div></div>'+
+    '</div></div>';
+  }
+
+  // =====================================================================
+  // ---------- ПЕРВЫЙ ЗАПУСК ----------
+  // =====================================================================
+  var ONB_KEY = 'lessoncal_onboarded';
+  function markOnboarded(){ try{ localStorage.setItem(ONB_KEY, '1'); }catch(e){} }
+  function isOnboarded(){ try{ return localStorage.getItem(ONB_KEY)==='1'; }catch(e){ return true; } }
+  var ONB_TYPES = [
+    {t: 'lessons',  ico: '📚', c: '#0a84ff', d: 'Курсы и уроки: сколько осталось оплаченных и когда продлевать'},
+    {t: 'finance',  ico: '💳', c: '#30d158', d: 'Доходы, расходы, балансы и бюджеты'},
+    {t: 'habits',   ico: '🔥', c: '#ff9f0a', d: 'Отмечайте каждый день и держите серию'},
+    {t: 'subs',     ico: '🔁', c: '#ff375f', d: 'Netflix, Spotify и другие — напомнит о списании'},
+    {t: 'planner',  ico: '✅', c: '#64d2ff', d: 'Задачи по дням недели с отметками «выполнено»'},
+    {t: 'events',   ico: '🎉', c: '#bf5af2', d: 'Дни рождения и важные даты'},
+    {t: 'schedule', ico: '🗓', c: '#5e5ce6', d: 'Расписание уроков или пар по дням недели'}
+  ];
+  function onbSteps(){
+    var s = ['welcome', 'types'];
+    if(state.onb.types.indexOf('finance')!==-1) s.push('account');
+    s.push('tips');
+    return s;
+  }
+  function startOnboarding(){
+    state.onb = {i: 0, types: [], acc: {label: T('Карта'), amount: '', currency: DEFAULT_CURRENCY}, back: false};
+    state.modal = 'onboarding'; state.menuOpen = false;
+    render();
+  }
+  function renderOnboarding(){
+    var o = state.onb;
+    if(!o) return '';
+    var steps = onbSteps();
+    if(o.i >= steps.length) o.i = steps.length - 1;
+    var step = steps[o.i];
+    var dots = steps.map(function(_, k){ return '<i class="'+(k===o.i?'on':(k<o.i?'done':''))+'"></i>'; }).join('');
+    var body = '', actions = '';
+    if(step==='welcome'){
+      body = '<div class="onb-hero">'+
+          '<div class="onb-icon"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="6" y="10" width="52" height="46" rx="12" fill="#fff"/><rect x="6" y="10" width="52" height="15" rx="12" fill="#ff453a"/><rect x="6" y="18" width="52" height="7" fill="#ff453a"/><text x="32" y="48" text-anchor="middle" font-size="22" font-weight="700" fill="#1d1d1f" font-family="-apple-system,Inter,sans-serif">'+todayD().getDate()+'</text></svg></div>'+
+          '<h2>'+T('Добро пожаловать!')+'</h2>'+
+          '<p>'+T('Занятия, деньги, привычки и задачи — в одном календаре. Всё хранится только на вашем устройстве.')+'</p>'+
+        '</div>'+
+        '<div class="onb-lang">'+[['ru','Русский'],['uk','Українська'],['en','English']].map(function(l){
+          return '<button type="button" class="onb-chip'+(LANG===l[0]?' on':'')+'" data-act="onb-lang" data-lang="'+l[0]+'">'+l[1]+'</button>';
+        }).join('')+'</div>';
+      actions = '<button type="button" class="btn primary onb-main" data-act="onb-next">'+T('Начать')+'</button>';
+    } else if(step==='types'){
+      body = '<h2>'+T('Что вы хотите вести?')+'</h2><p>'+T('Выберите одно или несколько — для каждого появится своя доска. Добавить другие можно потом в меню ☰.')+'</p>'+
+        '<div class="onb-types">'+ONB_TYPES.map(function(x){
+          var on = o.types.indexOf(x.t)!==-1;
+          return '<button type="button" class="onb-type'+(on?' on':'')+'" data-act="onb-type" data-type="'+x.t+'" aria-pressed="'+on+'">'+
+            '<span class="onb-ti" style="background:'+x.c+'">'+x.ico+'</span>'+
+            '<span class="onb-tt"><b>'+BOARD_TYPE_LABELS[x.t]+'</b><span>'+T(x.d)+'</span></span>'+
+            '<span class="onb-tick"></span></button>';
+        }).join('')+'</div>';
+      actions = '<button type="button" class="btn onb-back" data-act="onb-back">'+T('Назад')+'</button>'+
+        '<button type="button" class="btn primary onb-main" data-act="onb-next" id="onb-types-next"'+(o.types.length?'':' disabled')+'>'+T('Продолжить')+'</button>';
+    } else if(step==='account'){
+      body = '<h2>'+T('Ваш основной счёт')+'</h2><p>'+T('Чтобы траты и доходы сразу меняли баланс. Можно пропустить и добавить позже.')+'</p>'+
+        '<div class="field"><label>'+T('Название')+'</label><input type="text" id="onb-acc-label" value="'+escapeHtml(o.acc.label)+'"></div>'+
+        '<div class="field-row">'+
+          '<div class="field" style="flex:2;"><label>'+T('Сколько сейчас')+'</label><input type="number" id="onb-acc-amount" min="0" step="0.01" inputmode="decimal" placeholder="0" value="'+escapeHtml(o.acc.amount)+'"></div>'+
+          '<div class="field" style="flex:1;"><label>'+T('Валюта')+'</label><select id="onb-acc-cur">'+currencyOptionsHtml(o.acc.currency)+'</select></div>'+
+        '</div>';
+      actions = '<button type="button" class="btn onb-back" data-act="onb-back">'+T('Назад')+'</button>'+
+        '<button type="button" class="btn onb-skip-acc" data-act="onb-skip-acc">'+T('Пропустить')+'</button>'+
+        '<button type="button" class="btn primary onb-main" data-act="onb-next">'+T('Продолжить')+'</button>';
+    } else {
+      var tips = [
+        ['☰', T('Доски'), T('Переключайтесь между досками и создавайте новые в меню слева сверху.')],
+        ['📅', T('Нажмите на день'), T('Откроются все записи и действия на этот день.')],
+        ['💬', T('Быстрый ввод'), T('На телефоне кнопка справа внизу: напишите «кофе 85» — и трата записана.')],
+        ['🔥', T('Огонёк'), T('Заходите каждый день и зажигайте огонёк внизу экрана — держите серию.')]
+      ];
+      body = '<h2>'+T('Всё готово!')+'</h2><p>'+T('Пара подсказок, чтобы быстрее освоиться:')+'</p>'+
+        '<div class="onb-tips">'+tips.map(function(t, k){
+          return '<div class="onb-tip" style="animation-delay:'+(0.08*k+0.1).toFixed(2)+'s"><span class="onb-tip-i">'+t[0]+'</span><div><b>'+t[1]+'</b><span>'+t[2]+'</span></div></div>';
+        }).join('')+'</div>';
+      actions = '<button type="button" class="btn onb-back" data-act="onb-back">'+T('Назад')+'</button>'+
+        '<button type="button" class="btn primary onb-main" data-act="onb-finish">'+T('Поехали')+'</button>';
+    }
+    return '<div class="overlay onb-overlay"><div class="modal onb-modal" data-stop="1">'+
+      '<button class="close-x" data-act="close-modal" aria-label="'+T('Пропустить')+'">✕</button>'+
+      '<div class="onb-dots">'+dots+'</div>'+
+      '<div class="onb-step'+(o.back?' back':'')+'" data-step="'+step+'">'+body+'</div>'+
+      '<div class="onb-actions">'+actions+'</div>'+
+    '</div></div>';
+  }
+  function onbReadAccount(){
+    var o = state.onb;
+    var l = document.getElementById('onb-acc-label'), a = document.getElementById('onb-acc-amount'), c = document.getElementById('onb-acc-cur');
+    if(l) o.acc.label = l.value; if(a) o.acc.amount = a.value; if(c) o.acc.currency = c.value;
+  }
+  function boardIsEmpty(b){
+    return !(b.subjects.length || b.events.length || b.income.length || b.expenses.length || b.balances.length || b.scheduleItems.length || b.subs.length || b.habits.length);
+  }
+  function finishOnboarding(){
+    var o = state.onb;
+    onbReadAccount();
+    var order = ONB_TYPES.map(function(x){ return x.t; }).filter(function(t){ return o.types.indexOf(t)!==-1; });
+    // пустую доску «Мой календарь», созданную по умолчанию, заменяем выбранными
+    if(state.boards.length===1 && boardIsEmpty(state.boards[0]) && order.length) state.boards = [];
+    var made = order.map(function(t){
+      var b = newBoard(BOARD_TYPE_LABELS[t], t);
+      if(t==='finance' && o.acc.useAccount !== false){
+        var amt = parseFloat(o.acc.amount);
+        b.balances.push({id: uid(), label: (o.acc.label||'').trim() || T('Карта'), amount: isFinite(amt) ? r2(Math.max(0, amt)) : 0, currency: o.acc.currency || DEFAULT_CURRENCY, kind: 'main', history: []});
+      }
+      normalizeBoard(b);
+      state.boards.push(b);
+      return b;
+    });
+    if(!state.boards.length) state.boards.push(newBoard(T('Мой календарь'), 'lessons'));
+    state.activeBoardId = made.length ? made[0].id : state.boards[0].id;
+    markOnboarded();
+    state.onb = null; state.modal = null;
+    pendingAnim = 'enter';
+    saveData();
   }
 
   // ---------- event mutations ----------
@@ -2483,6 +3152,82 @@
   }
 
   // ---------- balance mutations ----------
+  // сумма в валюте счёта (null — нет курса)
+  function convertForBalance(b, amount, currency, bal){
+    var rate = getRate(b, currency, bal.currency);
+    return rate===null ? null : r2(amount*rate);
+  }
+  // курс понятным образом: «1 USD = 41.5 UAH», а не «1 UAH = 0.024 USD»
+  function rateText(from, to, r){
+    return r>=1 ? '1 '+from+' = '+fmtRate(r)+' '+to : '1 '+to+' = '+fmtRate(1/r)+' '+from;
+  }
+  function balLabel(x){ return (x.label ? x.label+' · ' : '') + fmtMoney(x.amount, x.currency); }
+  // список счетов: сначала в валюте операции, ниже — в другой валюте по курсу
+  function balanceOptionsHtml(b, currency, selectedId, noneLabel){
+    var same = b.balances.filter(function(x){ return x.currency===currency; });
+    var other = b.balances.filter(function(x){ return x.currency!==currency; });
+    var usable = function(x){ return getRate(b, currency, x.currency)!==null; };
+    var sel = selectedId!==undefined && selectedId!==null && (selectedId==='' || b.balances.some(function(x){ return x.id===selectedId && usable(x); }))
+      ? selectedId : (same[0] ? same[0].id : ((other.filter(usable)[0] || {}).id || ''));
+    var opt = function(x){
+      var ok = usable(x);
+      var extra = x.currency===currency ? '' : (ok ? ' · '+rateText(currency, x.currency, getRate(b, currency, x.currency)) : ' · '+T('нужен курс'));
+      return '<option value="'+x.id+'"'+(x.id===sel?' selected':'')+(ok?'':' disabled')+'>'+escapeHtml(balLabel(x)+extra)+'</option>';
+    };
+    return same.map(opt).join('')+
+      (other.length ? '<optgroup label="'+escapeHtml(T('Другая валюта — по курсу'))+'">'+other.map(opt).join('')+'</optgroup>' : '')+
+      '<option value=""'+(sel===''?' selected':'')+'>'+escapeHtml(noneLabel || T('Не изменять баланс'))+'</option>';
+  }
+  function findBalanceAny(id){
+    for(var i=0;i<state.boards.length;i++){
+      var x = (state.boards[i].balances||[]).find(function(v){ return v.id===id; });
+      if(x) return {board: state.boards[i], bal: x};
+    }
+    return null;
+  }
+  // пополнение счёта (не доход — просто деньги на счёт)
+  function topUpBalance(b, balId, amount, date, note){
+    var x = b.balances.find(function(v){ return v.id===balId; });
+    if(!x || !(amount>0)) return null;
+    x.amount = r2(x.amount + amount);
+    var hid = uid();
+    x.history.push({id: hid, kind: 'topup', date: date || fmt(todayD()), amount: r2(amount), note: note || ''});
+    saveData();
+    return hid;
+  }
+  // перевод между счетами (например, снял наличные с карты)
+  function transferBalance(b, fromId, toId, amount, date){
+    var from = b.balances.find(function(v){ return v.id===fromId; });
+    var to = b.balances.find(function(v){ return v.id===toId; });
+    if(!from || !to || from===to || !(amount>0)) return null;
+    var got = convertForBalance(b, amount, from.currency, to);
+    if(got===null) return null;
+    var pair = uid();
+    from.amount = r2(from.amount - amount);
+    to.amount = r2(to.amount + got);
+    from.history.push({id: uid(), kind: 'out', pair: pair, other: to.id, date: date, amount: r2(amount)});
+    to.history.push({id: uid(), kind: 'in', pair: pair, other: from.id, date: date, amount: got});
+    saveData();
+    return pair;
+  }
+  function deleteBalanceEntry(b, balId, hid){
+    var x = b.balances.find(function(v){ return v.id===balId; });
+    if(!x) return;
+    var h = x.history.find(function(v){ return v.id===hid; });
+    if(!h) return;
+    var undo = function(bal, e){
+      bal.amount = r2(bal.amount + (e.kind==='out' ? e.amount : -e.amount));
+      bal.history = bal.history.filter(function(v){ return v!==e; });
+    };
+    undo(x, h);
+    if(h.pair){
+      b.balances.forEach(function(o){
+        var e = o.history.find(function(v){ return v.pair===h.pair; });
+        if(e) undo(o, e);
+      });
+    }
+    saveData();
+  }
   function addBalance(data){
     var b = activeBoard();
     b.balances.push({id: uid(), label: data.label || '', currency: data.currency, amount: data.amount, kind: data.kind==='secondary' ? 'secondary' : 'main'});
@@ -2514,13 +3259,15 @@
     var sub = (kind==='expense' && subId) ? (item.subs||[]).find(function(s){ return s.id===subId; }) : null;
     if(sub) sub.amount = r2((Number(sub.amount)||0) + amount);
     var bal = balanceId ? b.balances.find(function(x){ return x.id===balanceId; }) : null;
+    var moved = bal ? convertForBalance(b, amount, item.currency, bal) : null;
+    if(moved===null) bal = null;
     var found = !!bal;
     if(bal){
-      bal.amount = r2(bal.amount + (kind==='income' ? amount : -amount));
+      bal.amount = r2(bal.amount + (kind==='income' ? moved : -moved));
     }
     if(!Array.isArray(item.history)) item.history = [];
     var hid = uid();
-    item.history.push({id: hid, date: date || fmt(todayD()), amount: amount, balanceId: found ? balanceId : null, subId: sub ? sub.id : null, subName: sub ? sub.name : '', note: note || ''});
+    item.history.push({id: hid, date: date || fmt(todayD()), amount: amount, balanceId: found ? balanceId : null, balAmount: found ? moved : null, subId: sub ? sub.id : null, subName: sub ? sub.name : '', note: note || ''});
     lastHistoryId = hid;
     saveData();
     return found;
@@ -2545,7 +3292,8 @@
     }
     if(h.balanceId){
       var bal = b.balances.find(function(x){ return x.id===h.balanceId; });
-      if(bal){ bal.amount = r2(bal.amount - (kind==='income' ? h.amount : -h.amount)); }
+      var mv = (typeof h.balAmount==='number') ? h.balAmount : h.amount;
+      if(bal){ bal.amount = r2(bal.amount - (kind==='income' ? mv : -mv)); }
     }
     item.history.splice(idx, 1);
     saveData();
@@ -2557,9 +3305,11 @@
     var inc = b.income.find(function(x){ return x.id===id; });
     if(!inc) return;
     var bal = balanceId ? b.balances.find(function(x){ return x.id===balanceId; }) : null;
-    if(bal) bal.amount = r2(bal.amount + amount);
+    var moved = bal ? convertForBalance(b, amount, inc.currency, bal) : null;
+    if(moved===null) bal = null;
+    if(bal) bal.amount = r2(bal.amount + moved);
     var hid = uid();
-    inc.history.push({id: hid, date: date || fmt(todayD()), amount: amount, balanceId: bal ? bal.id : null, subId: null, subName: '', occ: orig, noCard: true});
+    inc.history.push({id: hid, date: date || fmt(todayD()), amount: amount, balanceId: bal ? bal.id : null, balAmount: bal ? moved : null, subId: null, subName: '', occ: orig, noCard: true});
     inc.confirmed[orig] = hid;
     inc.skipped = inc.skipped.filter(function(x){ return x!==orig; });
     showToast(bal ? T('Зачислено на «')+(bal.label || T('счёт'))+'»' : T('Выплата отмечена'));
@@ -2652,6 +3402,7 @@
     html += renderSidebar();
     html += renderCalendar();
     html += '</div>';
+    html += renderStreakBar();
     if(state.menuOpen) html += ov('menu', renderMenuDrawer());
     if(state.modal==='add') html += ov('add', renderAddModal());
     if(state.modal==='day') html += ov('day', renderDayModal());
@@ -2666,8 +3417,12 @@
     if(state.modal==='income-confirm') html += ov('income-confirm', renderIncomeConfirmModal());
     if(state.modal==='income-postpone') html += ov('income-postpone', renderIncomePostponeModal());
     if(state.modal==='expense-pay') html += ov('expense-pay', renderExpensePayModal());
+    if(state.modal==='balance-op') html += ov('balance-op', renderBalanceOpModal());
     if(state.modal==='summary') html += ov('summary', renderSummaryModal());
     if(state.modal==='sub-pay') html += ov('sub-pay', renderSubPayModal());
+    if(state.modal==='streak') html += ov('streak', renderStreakModal());
+    if(state.modal==='onboarding') html += ov('onboarding', renderOnboarding());
+    if(state.modal==='admin' && isAdmin()) html += ov('admin', renderAdminModal());
     if(state.pendingBackup) html += ov('backup', renderBackupDialog(), true);
     if(state.confirmDeleteId) html += ov('confirm-board', renderConfirmDeleteBoardModal(), true);
     if(state.renameBoardId) html += ov('rename-board', renderRenameBoardModal(), true);
@@ -2814,7 +3569,7 @@
         '<div class="month-nav">'+
           '<div class="month-switch">'+
             '<button class="icon-btn" data-act="prev-month">‹</button>'+
-            '<div class="label mono">'+MONTH_NAMES[vd.getMonth()]+' '+vd.getFullYear()+'</div>'+
+            '<div class="label mono">'+periodLabel()+'</div>'+
             '<button class="icon-btn" data-act="next-month">›</button>'+
           '</div>'+
           '<div class="month-extra">'+
@@ -2825,6 +3580,7 @@
           '</div>'+
         '</div>'+
       '</header>'+
+      (FAKE_TODAY ? '<button type="button" class="fake-date-badge" data-act="open-admin">🧪 Тестовая дата: <b>'+fmtHuman(FAKE_TODAY)+'</b> · нажмите, чтобы изменить</button>' : '')+
       storageWarn;
   }
 
@@ -3032,16 +3788,17 @@
         return '<div class="balance-line">'+
           '<span class="bl-name">'+escapeHtml(x.label || T('Основной'))+'</span>'+
           '<span class="bl-sum">'+fmtMoney(x.amount, x.currency)+'</span>'+
+          '<button type="button" class="bl-plus" data-act="balance-op" data-id="'+x.id+'" title="'+T('Пополнить или перевести')+'" aria-label="'+T('Пополнить или перевести')+'">+</button>'+
         '</div>';
       }).join('');
     } else {
       body = T('Добавить баланс');
     }
     return ''+
-      '<button class="balance-widget" data-act="open-balance">'+
+      '<div class="balance-widget" role="button" tabindex="0" data-act="open-balance">'+
         T('<div class="balance-widget-label">Баланс</div>')+
         '<div class="balance-widget-value mono">'+body+'</div>'+
-      '</button>';
+      '</div>';
   }
 
   function renderIncomeSidebar(ab){
@@ -3173,13 +3930,19 @@
     var mondayOffset = (jsDow===0) ? 6 : jsDow-1;
     var gridStart = addDays(firstOfMonth, -mondayOffset);
     var todayStr = fmt(todayD());
+    var isWeek = state.calView==='week';
+    if(isWeek) gridStart = parseD(curWeekStart());
 
     var dowRow = '<div class="cal-dow">'+DOW_LABELS.map(function(l){ return '<div>'+l+'</div>'; }).join('')+'</div>';
+    var viewSwitch = '<div class="cal-top"><div class="segmented" role="tablist">'+
+      '<button class="seg-btn'+(isWeek?' active':'')+'" data-act="cal-view" data-view="week">'+T('Неделя')+'</button>'+
+      '<button class="seg-btn'+(isWeek?'':' active')+'" data-act="cal-view" data-view="month">'+T('Месяц')+'</button>'+
+    '</div></div>';
     var cells = '';
-    for(var i=0;i<42;i++){
+    for(var i=0;i<(isWeek?7:42);i++){
       var d = addDays(gridStart, i);
       var ds = fmt(d);
-      var outside = d.getMonth()!==m;
+      var outside = !isWeek && d.getMonth()!==m;
       var isToday = ds===todayStr;
       var markers = '';
       if(ab.type==='events'){
@@ -3256,13 +4019,24 @@
           markers += '<span class="'+cls+'" title="'+escapeHtml(tt)+'" style="--mc:'+color+'"></span>';
         });
       }
+      if(isWeek){
+        // в режиме недели рядом с точкой пишем название
+        var wkItems = [];
+        markers.replace(/<span class="(marker[^"]*)" title="([^"]*)" style="([^"]*)"><\/span>/g, function(all, c, t, st){
+          wkItems.push('<span class="wk-item" title="'+t+'"><span class="'+c+'" style="'+st+'"></span><span class="wk-txt">'+t+'</span></span>');
+          return '';
+        });
+        var WK_MAX = 5;
+        markers = wkItems.slice(0, WK_MAX).join('') +
+          (wkItems.length > WK_MAX ? '<span class="wk-more">'+(LANG==='en' ? '+'+(wkItems.length - WK_MAX)+' more' : T('ещё')+' '+(wkItems.length - WK_MAX))+'</span>' : '');
+      }
       cells += ''+
         '<div class="cal-cell'+(outside?' outside':'')+(isToday?' today':'')+'" data-act="open-day" data-date="'+ds+'">'+
-          '<div class="num">'+d.getDate()+'</div>'+
-          '<div class="cal-markers">'+markers+'</div>'+
+          (isWeek ? '<div class="wk-head"><span class="wk-dow">'+DOW_LABELS[i]+'</span><div class="num">'+d.getDate()+'</div></div>' : '<div class="num">'+d.getDate()+'</div>')+
+          '<div class="cal-markers">'+(markers || (isWeek ? '<span class="wk-empty">—</span>' : ''))+'</div>'+
         '</div>';
     }
-    return '<div class="cal-wrap'+(compact?' compact':'')+'">'+dowRow+'<div class="cal-grid">'+cells+'</div></div>';
+    return '<div class="cal-wrap'+(compact?' compact':'')+(isWeek?' week':'')+'">'+viewSwitch+dowRow+'<div class="cal-grid">'+cells+'</div></div>';
   }
 
   function renderExpenseWheel(ab){
@@ -4022,8 +4796,10 @@
     function rowHtml(x){
       return ''+
         '<div class="day-item">'+
-          '<div class="day-item-head">'+
-            '<span class="nm">'+(x.label?escapeHtml(x.label)+' · ':'')+fmtMoney(x.amount, x.currency)+'</span>'+
+          '<div class="day-item-head bal-head">'+
+            '<span class="nm">'+escapeHtml(x.label || T('Без пометки'))+'</span>'+
+            '<span class="bal-amt mono">'+fmtMoney(x.amount, x.currency)+'</span>'+
+            '<button type="button" class="bl-plus" data-act="balance-op" data-id="'+x.id+'" title="'+T('Пополнить или перевести')+'" aria-label="'+T('Пополнить или перевести')+'">+</button>'+
           '</div>'+
           '<div class="row-actions">'+
             '<button class="btn small" data-act="edit-balance" data-id="'+x.id+T('">Изменить</button>')+
@@ -4044,8 +4820,8 @@
       '<div class="modal" data-stop="1">'+
         '<button class="close-x" data-act="close-modal">✕</button>'+
         T('<h3 class="display">Баланс</h3>')+
-        T('<div class="sub">Основные балансы — от 1 до ')+MAX_MAIN_BALANCES+T(' (например, главная карта). Второстепенные — наличные, копилка и т.д.</div>')+
-        T('<div class="section-title">Основные балансы <span class="dim">(')+mainCount+'/'+MAX_MAIN_BALANCES+')</span></div>'+
+        '<div class="sub">'+T('Основные счета видны на главном экране, с них списываются траты из быстрого ввода. Второстепенные — наличные в заначке, копилка и т.д.')+'</div>'+
+        '<div class="section-title">'+T('Основные балансы')+' <span class="dim">· '+mainCount+'</span></div>'+
         mainRows+
         T('<div class="section-title">Второстепенные балансы</div>')+
         secRows+
@@ -4073,18 +4849,70 @@
     '</div>';
   }
 
+  function renderBalanceOpModal(){
+    var tg = state.balanceTarget;
+    if(!tg) return '';
+    var ab = activeBoard();
+    var x = ab.balances.find(function(v){ return v.id===tg.id; });
+    if(!x) return '';
+    var mode = tg.mode==='transfer' ? 'transfer' : 'topup';
+    var others = ab.balances.filter(function(v){ return v.id!==x.id; });
+    var todayStr = fmt(todayD());
+    var cur = CURRENCIES[x.currency] || x.currency;
+    var body;
+    if(mode==='topup'){
+      body = '<div class="field"><label>'+T('Сумма')+' ('+cur+')</label><input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="0" required></div>'+
+        '<div class="field"><label>'+T('Комментарий')+' <span class="dim">'+T('(необязательно)')+'</span></label><input type="text" name="note" placeholder="'+T('Например, подарок или возврат долга')+'"></div>';
+    } else if(others.length){
+      body = '<div class="field"><label>'+T('Куда')+'</label><select name="to">'+
+          others.map(function(o){
+            var r = getRate(ab, x.currency, o.currency);
+            var extra = o.currency===x.currency ? '' : (r!==null ? ' · '+rateText(x.currency, o.currency, r) : ' · '+T('нужен курс'));
+            return '<option value="'+o.id+'"'+(r===null?' disabled':'')+'>'+escapeHtml(balLabel(o)+extra)+'</option>';
+          }).join('')+'</select></div>'+
+        '<div class="field"><label>'+T('Сумма')+' ('+cur+')</label><input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="0" required>'+
+          '<div class="field-hint">'+T('Спишется с «')+escapeHtml(x.label || T('счёт'))+T('» и зачислится на выбранный счёт. Это не доход и не расход — в статистику не попадёт.')+'</div></div>';
+    } else {
+      body = '<div class="empty" style="padding:14px 6px;">'+T('Нужен второй счёт — добавьте его в окне «Баланс».')+'</div>';
+    }
+    var hist = x.history.slice(-8).reverse().map(function(h){
+      var nm = h.kind==='topup' ? T('Пополнение')+(h.note ? ' · '+escapeHtml(h.note) : '') : '';
+      if(h.kind==='in' || h.kind==='out'){
+        var o = ab.balances.find(function(v){ return v.id===h.other; });
+        nm = (h.kind==='in' ? T('Перевод с') : T('Перевод на'))+' «'+escapeHtml(o ? (o.label || T('счёт')) : '?')+'»';
+      }
+      var plus = h.kind!=='out';
+      return '<div class="day-item compact"><div class="day-item-head"><span class="nm">'+nm+'</span>'+
+        '<span class="mono" style="font-size:13px;color:'+(plus?'var(--sage)':'var(--rose)')+';">'+(plus?'+':'−')+fmtMoney2(h.amount, x.currency)+'</span></div>'+
+        '<div class="row-between"><span class="status">'+fmtHuman(h.date)+'</span>'+
+        '<button class="btn small danger" data-act="delete-balance-entry" data-bal="'+x.id+'" data-id="'+h.id+'">'+T('Удалить')+'</button></div></div>';
+    }).join('');
+    return '<div class="overlay"><div class="modal narrow" data-stop="1">'+
+      '<button class="close-x" data-act="close-modal">✕</button>'+
+      '<h3 class="display">'+escapeHtml(x.label || T('Счёт'))+'</h3>'+
+      '<div class="sub">'+T('Сейчас')+': <b>'+fmtMoney2(x.amount, x.currency)+'</b></div>'+
+      '<div class="segmented seg-wide" style="margin-bottom:16px;">'+
+        '<button type="button" class="seg-btn'+(mode==='topup'?' active':'')+'" data-act="balance-mode" data-mode="topup">'+T('Пополнить')+'</button>'+
+        '<button type="button" class="seg-btn'+(mode==='transfer'?' active':'')+'" data-act="balance-mode" data-mode="transfer">'+T('Перевести')+'</button>'+
+      '</div>'+
+      '<form id="balance-op-form" data-mode="'+mode+'">'+
+        body+
+        ((mode==='topup' || others.length) ?
+          '<div class="field"><label>'+T('Дата')+'</label><input type="date" name="date" value="'+todayStr+'" required></div>'+
+          '<div class="modal-actions">'+
+            '<button type="button" class="btn" data-act="close-modal">'+T('Отмена')+'</button>'+
+            '<button type="submit" class="btn primary">'+(mode==='topup' ? T('Пополнить') : T('Перевести'))+'</button>'+
+          '</div>' : '')+
+      '</form>'+
+      (hist ? '<div class="section-title">'+T('Последние операции')+'</div>'+hist : '')+
+    '</div></div>';
+  }
+
   function accountSelectHtml(ab, currency, emptyHint){
-    var matching = ab.balances.filter(function(x){ return x.currency===currency; });
-    if(!matching.length){
+    if(!ab.balances.length){
       return '<div class="field-hint" style="margin-bottom:14px;">'+emptyHint+'</div>';
     }
-    return T('<div class="field"><label>Счёт</label><select name="balanceId">')+
-      matching.map(function(x){
-        var label = (x.label ? x.label+' · ' : '') + fmtMoney(x.amount, x.currency);
-        return '<option value="'+x.id+'">'+escapeHtml(label)+'</option>';
-      }).join('')+
-      T('<option value="">Не изменять баланс</option>')+
-    '</select></div>';
+    return T('<div class="field"><label>Счёт</label><select name="balanceId">')+balanceOptionsHtml(ab, currency, null)+'</select></div>';
   }
 
   function renderIncomeConfirmModal(){
@@ -4170,13 +4998,9 @@
     var rc = exp.recurring;
     var eff = rc.postponed[tg.orig] || tg.orig;
     var todayStr = fmt(todayD());
-    var bals = ab.balances.filter(function(x){ return x.currency===exp.currency; });
-    var selId = bals.some(function(x){ return x.id===rc.balanceId; }) ? rc.balanceId : (rc.balanceId==='' && Object.keys(rc.confirmed).length ? '' : (bals[0] ? bals[0].id : ''));
-    var acc = bals.length
-      ? '<div class="field"><label>'+T('Списать со счёта')+'</label><select name="balanceId">'+
-          bals.map(function(x){ return '<option value="'+x.id+'"'+(x.id===selId?' selected':'')+'>'+escapeHtml((x.label ? x.label+' · ' : '')+fmtMoney(x.amount, x.currency))+'</option>'; }).join('')+
-          '<option value=""'+(selId===''?' selected':'')+'>'+T('Не списывать со счёта')+'</option>'+
-        '</select></div>'
+    var selId = rc.balanceId ? rc.balanceId : (Object.keys(rc.confirmed).length ? '' : null);
+    var acc = ab.balances.length
+      ? '<div class="field"><label>'+T('Списать со счёта')+'</label><select name="balanceId">'+balanceOptionsHtml(ab, exp.currency, selId, T('Не списывать со счёта'))+'</select></div>'
       : '<div class="field-hint" style="margin-bottom:14px;">'+T('Нет счёта в этой валюте — платёж отметится, но баланс не изменится.')+'</div>';
     return '<div class="overlay"><div class="modal narrow" data-stop="1">'+
       '<button class="close-x" data-act="close-modal">✕</button>'+
@@ -4360,17 +5184,12 @@
     var tSub = (t.kind==='expense' && t.subId) ? (item.subs||[]).find(function(s){ return s.id===t.subId; }) : null;
     var verb = t.kind==='income' ? T('доходу') : T('расходу');
     var effect = t.kind==='income' ? T('прибавится к выбранному счёту') : T('спишется с выбранного счёта');
-    var matching = ab.balances.filter(function(x){ return x.currency===item.currency; });
     var accountField;
-    if(matching.length){
-      accountField = ''+
-        T('<div class="field"><label>Счёт</label><select name="balanceId">')+
-          matching.map(function(x){
-            var label = (x.label ? x.label+' · ' : '') + fmtMoney(x.amount, x.currency);
-            return '<option value="'+x.id+'">'+escapeHtml(label)+'</option>';
-          }).join('')+
-          T('<option value="">Не изменять баланс</option>')+
-        '</select></div>';
+    if(ab.balances.length){
+      // по умолчанию — счёт, с которого платили в эту категорию в прошлый раз
+      var lastBal = null;
+      (item.history||[]).slice().reverse().some(function(h){ if(h.balanceId){ lastBal = h.balanceId; return true; } return false; });
+      accountField = T('<div class="field"><label>Счёт</label><select name="balanceId">')+balanceOptionsHtml(ab, item.currency, lastBal)+'</select></div>';
     } else {
       accountField = T('<div class="field-hint" style="margin-bottom:14px;">Нет счёта в валюте ')+item.currency+T(' — сумма добавится к карточке, но баланс не изменится. Можно добавить счёт через «Баланс» в меню.</div>');
     }
@@ -4385,7 +5204,7 @@
         '<form id="transaction-form">'+
           T('<div class="field"><label>Сумма (')+(CURRENCIES[item.currency]||item.currency)+')</label><input type="number" name="amount" min="0.01" step="0.01" placeholder="0" required></div>'+
           accountField+
-          T('<div class="field"><label>Дата траты</label><input type="date" name="date" value="')+fmt(todayD())+'" required></div>'+
+          '<div class="field"><label>'+(t.kind==='income' ? T('Дата поступления') : T('Дата траты'))+'</label><input type="date" name="date" value="'+fmt(todayD())+'" required></div>'+
           '<div class="modal-actions">'+
             T('<button type="button" class="btn" data-act="close-modal">Отмена</button>')+
             T('<button type="submit" class="btn primary">Добавить</button>')+
@@ -4452,8 +5271,29 @@
         all.push({kind:'expense', itemId:exp.id, name:exp.name+histSub(exp,h), color:exp.color, currency:exp.currency, h:h});
       });
     });
+    ab.balances.forEach(function(x){
+      x.history.forEach(function(h){
+        if(h.kind==='in') return; // перевод показываем один раз — со стороны списания
+        var nm;
+        if(h.kind==='out'){
+          var o = ab.balances.find(function(v){ return v.id===h.other; });
+          nm = T('Перевод')+' «'+(x.label || T('счёт'))+'» → «'+(o ? (o.label || T('счёт')) : '?')+'»';
+        } else nm = T('Пополнение')+' «'+(x.label || T('счёт'))+'»'+(h.note ? ' · '+h.note : '');
+        all.push({kind: h.kind==='out' ? 'transfer' : 'topup', balId: x.id, itemId: '', name: nm, color: '', currency: x.currency, h: h});
+      });
+    });
     all.sort(function(a,b){ return a.h.date < b.h.date ? 1 : (a.h.date > b.h.date ? -1 : 0); });
     var rows = all.map(function(t){
+      if(t.kind==='topup' || t.kind==='transfer'){
+        return '<div class="day-item"><div class="day-item-head">'+
+            '<span class="dot bal-dot">'+(t.kind==='topup' ? '+' : '⇄')+'</span>'+
+            '<span class="nm">'+escapeHtml(t.name)+'</span>'+
+            '<span class="mono" style="font-size:11px;color:'+(t.kind==='topup'?'var(--sage)':'var(--ink-dim)')+';">'+(t.kind==='topup'?'+':'')+fmtMoney(t.h.amount, t.currency)+'</span>'+
+          '</div>'+
+          '<div class="status">'+fmtHuman(t.h.date)+'</div>'+
+          '<div class="row-actions"><button class="btn small danger" data-act="delete-balance-entry" data-bal="'+t.balId+'" data-id="'+t.h.id+'">'+T('Удалить')+'</button></div>'+
+        '</div>';
+      }
       var color = COLORS[t.color] || COLORS.amber;
       var sign = t.kind==='income' ? '+' : '-';
       var signColor = t.kind==='income' ? 'var(--sage)' : 'var(--rose)';
@@ -4595,62 +5435,57 @@
 
   function renderSettingsModal(){
     var th = state.theme;
+    var privStartOn = (function(){ try{ return localStorage.getItem(PRIV_START_KEY)==='1'; }catch(e){ return false; } })();
+    var group = function(title, inner){ return '<div class="set-group"><div class="set-title">'+title+'</div><div class="set-box">'+inner+'</div></div>'; };
+    var row = function(label, control, hint){ return '<div class="set-row"><div class="set-label">'+label+'</div>'+control+(hint ? '<div class="field-hint">'+hint+'</div>' : '')+'</div>'; };
+    var seg = function(items, cur, act, key){
+      return '<div class="toggle-row">'+items.map(function(o){
+        return '<button type="button" class="toggle-btn'+(cur===o[0]?' active':'')+'" data-act="'+act+'" data-'+key+'="'+o[0]+'">'+o[1]+'</button>';
+      }).join('')+'</div>';
+    };
     return ''+
     '<div class="overlay">'+
-      '<div class="modal narrow" data-stop="1">'+
+      '<div class="modal narrow settings-modal" data-stop="1">'+
         '<button class="close-x" data-act="close-modal">✕</button>'+
         T('<h3 class="display">Настройки</h3>')+
-        T('<div class="sub">Оформление, язык, сводка и резервные копии</div>')+
-        '<div class="field">'+
-          T('<label>Тема</label>')+
-          '<div class="toggle-row">'+
-            '<button type="button" class="toggle-btn'+(th==='dark'?' active':'')+T('" data-act="set-theme" data-theme="dark">Тёмная</button>')+
-            '<button type="button" class="toggle-btn'+(th==='light'?' active':'')+T('" data-act="set-theme" data-theme="light">Светлая</button>')+
-            '<button type="button" class="toggle-btn'+(th==='auto'?' active':'')+T('" data-act="set-theme" data-theme="auto">Как в системе</button>')+
-          '</div>'+
-        '</div>'+
-        '<div class="field"><label>'+T('Язык')+'</label>'+
-          '<select id="lang-select">'+
-            [['auto', T('Как в системе')], ['ru','Русский'], ['uk','Українська'], ['en','English']].map(function(o){
-              return '<option value="'+o[0]+'"'+(LANG_PREF===o[0]?' selected':'')+'>'+o[1]+'</option>';
-            }).join('')+
-          '</select>'+
-          '<div class="field-hint">'+T('После смены языка страница перезагрузится.')+'</div>'+
-        '</div>'+
-        '<div class="field">'+
-          '<label class="switch-label"><span>'+T('Скрывать суммы при запуске')+'</span>'+
-            '<input type="checkbox" class="switch" id="privacy-start"'+((function(){ try{ return localStorage.getItem(PRIV_START_KEY)==='1'; }catch(e){ return false; } })()?' checked':'')+'>'+
-          '</label>'+
-          '<div class="field-hint">'+T('Режим приватности: все суммы заменяются на «••••». Включается и выключается кнопкой с глазом в шапке.')+'</div>'+
-        '</div>'+
-        '<div class="field">'+
-          T('<label class="switch-label"><span>Показывать сводку дня при запуске</span>')+
-            '<input type="checkbox" class="switch" id="summary-start"'+(getSummaryOnStart()?' checked':'')+'>'+
-          '</label>'+
-        '</div>'+
-        '<div class="drawer-hr"></div>'+
-        '<div class="field">'+
-          T('<label>Резервная копия</label>')+
-          T('<button type="button" class="btn primary" style="width:100%;" data-act="download-backup">⬇ Скачать копию всех досок</button>')+
-          T('<div class="field-hint">Сохраните файл в надёжное место — если браузер очистит данные, из него можно всё восстановить.</div>')+
-        '</div>'+
-        '<div class="field">'+
-          T('<label>Поделиться текущей доской</label>')+
-          T('<button type="button" class="btn" style="width:100%;" data-act="download-board">⬇ Скачать файл доски</button>')+
-          T('<div class="field-hint">Отправьте файл как обычно (мессенджер, почта) — размер доски тут не важен.</div>')+
-        '</div>'+
-        '<div class="drawer-hr"></div>'+
-        '<div class="field">'+
-          T('<label>Загрузить доску или копию из файла</label>')+
-          '<div id="board-file-drop" class="drop-zone">'+
+
+        group(T('Оформление'),
+          row(T('Тема'), seg([['dark', T('Тёмная')], ['light', T('Светлая')], ['auto', T('Как в системе')]], th, 'set-theme', 'theme'))+
+          row(T('Язык'),
+            '<select id="lang-select">'+
+              [['auto', T('Как в системе')], ['ru','Русский'], ['uk','Українська'], ['en','English']].map(function(o){
+                return '<option value="'+o[0]+'"'+(LANG_PREF===o[0]?' selected':'')+'>'+o[1]+'</option>';
+              }).join('')+
+            '</select>', T('После смены языка страница перезагрузится.'))+
+          row(T('Анимации'), seg([['full', T('Все')], ['lite', T('Упрощённые')], ['off', T('Выключены')]], animMode(), 'set-anim', 'anim'),
+            T('«Упрощённые» убирают размытие фона и анимации появления — меньше нагрузки на слабых телефонах. «Выключены» — всё меняется мгновенно.'))
+        )+
+
+        group(T('При запуске'),
+          '<label class="set-switch"><span>'+T('Скрывать суммы при запуске')+'<small>'+T('Все суммы заменяются на «••••». Кнопка с глазом в шапке включает и выключает это в любой момент.')+'</small></span>'+
+            '<input type="checkbox" class="switch" id="privacy-start"'+(privStartOn?' checked':'')+'></label>'+
+          '<label class="set-switch"><span>'+T('Показывать сводку дня')+'<small>'+T('Всё важное на сегодня со всех досок сразу после открытия.')+'</small></span>'+
+            '<input type="checkbox" class="switch" id="summary-start"'+(getSummaryOnStart()?' checked':'')+'></label>'
+        )+
+
+        group(T('Данные'),
+          '<button type="button" class="set-btn" data-act="download-backup"><span class="set-ico">⬇</span><span>'+T('Скачать копию всех досок')+'<small>'+T('Если браузер очистит данные, из этого файла можно всё восстановить.')+'</small></span></button>'+
+          '<button type="button" class="set-btn" data-act="download-board"><span class="set-ico">↗</span><span>'+T('Поделиться текущей доской')+'<small>'+T('Файл можно отправить в мессенджере или по почте.')+'</small></span></button>'+
+          '<div id="board-file-drop" class="drop-zone set-drop">'+
             '<input type="file" id="board-file-input" accept="application/json,.json,.txt" style="display:none;">'+
-            T('<button type="button" class="btn primary" data-act="pick-board-file">Выбрать файл</button>')+
-            T('<div class="field-hint" style="margin-top:10px;">или перетащите файл сюда</div>')+
-          '</div>'+
-        '</div>'+
+            '<button type="button" class="set-btn" data-act="pick-board-file"><span class="set-ico">⬆</span><span>'+T('Загрузить доску или копию')+'<small>'+T('Выберите файл или перетащите его сюда.')+'</small></span></button>'+
+          '</div>'
+        )+
+
+        group(T('О приложении'),
+          '<button type="button" class="set-btn" data-act="show-onboarding"><span class="set-ico">👋</span><span>'+T('Показать приветствие')+'<small>'+T('Ещё раз пройти первый запуск и добавить доски.')+'</small></span></button>'+
+          (isAdmin() ? '<button type="button" class="set-btn" data-act="open-admin"><span class="set-ico">🛠</span><span>Админ-панель<small>Тестовая дата, огонёк, шаблоны</small></span></button>' : '')
+        )+
+        '<div class="app-version" data-act="version-tap">'+T('Версия')+' '+APP_VERSION+' · '+T('бета')+'</div>'+
       '</div>'+
     '</div>';
   }
+
 
   // ---------- event handling ----------
   // заполняет списки «категория» и «счёт» по выбранной доске финансов и валюте формы
@@ -4676,8 +5511,14 @@
           T('<option value="new">+ Новая категория «')+escapeHtml(finInfo.subjName||'')+'»</option>';
         eSel.value = exps.some(function(e){ return e.id===prevE; }) ? prevE : (byName ? byName.id : 'new');
         var bals = bd.balances.filter(function(x){ return x.currency===cur; });
+        var others = bd.balances.filter(function(x){ return x.currency!==cur; });
         aSel.innerHTML = bals.map(function(x){ return '<option value="'+x.id+'">'+escapeHtml(x.label)+'</option>'; }).join('')+
+          (others.length ? '<optgroup label="'+escapeHtml(T('Другая валюта — по курсу'))+'">'+others.map(function(x){
+            var r = x.rates && x.rates[cur];
+            return '<option value="'+x.id+'"'+(r?'':' disabled')+'>'+escapeHtml(x.label+(r ? ' · '+rateText(cur, x.currency, r) : ' · '+T('нужен курс')))+'</option>';
+          }).join('')+'</optgroup>' : '')+
           T('<option value="">Не списывать со счёта</option>');
+        bals = bals.concat(others.filter(function(x){ return x.rates && x.rates[cur]; }));
         aSel.value = bals.some(function(x){ return x.id===prevA; }) ? prevA : (prevA==='' && link.boardId===bd.id && link.balanceId==='' ? '' : (bals[0] ? bals[0].id : ''));
     };
     form.querySelector('select[name=finBoard]').addEventListener('change', function(){
@@ -4719,6 +5560,20 @@
       el.addEventListener('click', function(ev){ ev.stopPropagation(); });
     });
     var overlays = app.querySelectorAll('.overlay');
+    overlays.forEach(function(overlay){
+      if(overlay.classList.contains('center')) return;
+      var modal = overlay.querySelector('.modal');
+      if(!modal) return;
+      attachSheetDrag(modal, function(){
+        overlay.classList.add('dragged');
+        var btn = modal.querySelector('.close-x[data-act]');
+        var fake = {stopPropagation: function(){}, preventDefault: function(){}};
+        if(btn) handleAction(btn, fake); else closeAllModals();
+      }, {setFade: function(f, dur){
+        overlay.style.transition = dur ? 'background-color '+dur+'ms ease' : 'none';
+        overlay.style.setProperty('--bd', f.toFixed(3));
+      }});
+    });
     overlays.forEach(function(overlay, idx){
       var downOnBackdrop = false;
       overlay.addEventListener('pointerdown', function(ev){ downOnBackdrop = (ev.target===overlay); });
@@ -4727,7 +5582,7 @@
         downOnBackdrop = false;
         if(idx!==overlays.length-1) return;
         if(anyDialog()){ closeDialogs(); return; }
-        closeAllModals();
+        closeTopModal();
       });
     });
 
@@ -5050,7 +5905,7 @@
         var editId = fd.get('editId');
         if(payload.kind==='main'){
           var otherMain = activeBoard().balances.filter(function(x){ return x.kind==='main' && x.id!==editId; }).length;
-          if(otherMain>=MAX_MAIN_BALANCES){ showToast(T('Основных балансов может быть не больше ')+MAX_MAIN_BALANCES); return; }
+
         }
         state.editing = null;
         if(editId){ updateBalance(editId, payload); } else { addBalance(payload); }
@@ -5201,6 +6056,38 @@
         var tg = state.incomeTarget;
         state.modal = null; state.incomeTarget = null;
         confirmIncome(tg.id, tg.orig, r2(amount), fd.get('balanceId') || null, fd.get('date') || fmt(todayD()));
+      });
+    }
+
+    wireStreakSwipe();
+    var admFree = document.getElementById('adm-streak-free');
+    if(admFree){
+      admFree.addEventListener('change', function(){
+        try{ localStorage.setItem(STREAK_FREE_KEY, admFree.checked ? '1' : '0'); }catch(e){}
+        showToast(admFree.checked ? 'Свободный режим огонька включён' : 'Свободный режим выключен');
+      });
+    }
+
+    var balanceOpForm = document.getElementById('balance-op-form');
+    if(balanceOpForm){
+      balanceOpForm.addEventListener('submit', function(ev){
+        ev.preventDefault();
+        var fd = new FormData(balanceOpForm);
+        var amount = r2(parseFloat(fd.get('amount')));
+        if(!(amount>0)){ showToast(T('Укажите сумму')); return; }
+        var tg = state.balanceTarget, b = activeBoard();
+        var date = fd.get('date') || fmt(todayD());
+        var back = tg.from==='balance' ? 'balance' : null;
+        if(balanceOpForm.dataset.mode==='transfer'){
+          if(!transferBalance(b, tg.id, fd.get('to'), amount, date)){ showToast(T('Для перевода в другую валюту нужен курс')); return; }
+          state.modal = back; state.balanceTarget = null;
+          showToast(T('Перевод выполнен'));
+          render();
+        } else {
+          state.modal = back; state.balanceTarget = null;
+          topUpBalance(b, tg.id, amount, date, (fd.get('note')||'').toString().trim());
+          showToast(T('Баланс пополнен'));
+        }
       });
     }
 
@@ -5379,8 +6266,128 @@
     if(b){ b.remove(); t.classList.remove('has-action'); }
   }
 
+  function curWeekStart(){
+    if(!state.weekStart){
+      var t = todayD();
+      var vd = state.viewDate;
+      // неделя с сегодняшним днём, если смотрим текущий месяц, иначе — первая неделя месяца
+      state.weekStart = (vd.getFullYear()===t.getFullYear() && vd.getMonth()===t.getMonth()) ? weekKey(t) : weekKey(vd);
+    }
+    return state.weekStart;
+  }
+  function periodLabel(short){
+    var vd = state.viewDate;
+    if(short && state.calView==='week'){
+      var a0 = parseD(curWeekStart()), b0 = addDays(a0, 6);
+      return a0.getMonth()===b0.getMonth()
+        ? a0.getDate()+'–'+b0.getDate()+' '+MONTH_SHORT[b0.getMonth()]
+        : a0.getDate()+' '+MONTH_SHORT[a0.getMonth()]+' – '+b0.getDate()+' '+MONTH_SHORT[b0.getMonth()];
+    }
+    if(state.calView!=='week') return MONTH_NAMES[vd.getMonth()]+' '+vd.getFullYear();
+    var a = parseD(curWeekStart()), b = addDays(a, 6);
+    if(a.getMonth()===b.getMonth()) return a.getDate()+'–'+fmtHumanNoYear(fmt(b));
+    return fmtHumanNoYear(fmt(a))+' – '+fmtHumanNoYear(fmt(b));
+  }
+  function setCalView(v){
+    v = v==='week' ? 'week' : 'month';
+    if(v===state.calView) return;
+    if(v==='week'){ state.weekStart = null; curWeekStart(); }
+    else state.viewDate = startOfMonth(addDays(parseD(curWeekStart()), 3));
+    state.calView = v;
+    try{ localStorage.setItem('lessoncal_calview', v); }catch(e){}
+    pendingAnim = '';
+    render();
+  }
+  // тянуть шторку вниз — закрыть (как в iOS)
+  function attachSheetDrag(panel, onClose, opts){
+    opts = opts || {};
+    var sy = 0, sx = 0, dy = 0, t0 = 0, decided = false, dragging = false, fromGrip = false;
+    var setFade = opts.setFade || function(){};
+    panel.addEventListener('touchstart', function(e){
+      if(e.touches.length!==1 || window.innerWidth>640 || (e.target.closest && e.target.closest('[data-nodrag]'))) { decided = true; dragging = false; return; }
+      var r = panel.getBoundingClientRect();
+      sy = e.touches[0].clientY; sx = e.touches[0].clientX;
+      fromGrip = (sy - r.top) < (opts.gripHeight || 56);
+      dy = 0; t0 = Date.now(); decided = false; dragging = false;
+    }, {passive: true});
+    panel.addEventListener('touchmove', function(e){
+      if(decided && !dragging) return;
+      var cy = e.touches[0].clientY, cx = e.touches[0].clientX;
+      dy = cy - sy;
+      if(!decided){
+        if(Math.abs(dy)<6 && Math.abs(cx-sx)<6) return;
+        decided = true;
+        var tag = (e.target && e.target.tagName) || '';
+        var scroller = opts.scroller || panel;
+        var atTop = scroller.scrollTop <= 0;
+        dragging = dy>0 && Math.abs(dy)>Math.abs(cx-sx) &&
+          (fromGrip || (!opts.gripOnly && atTop && !/^(INPUT|TEXTAREA|SELECT)$/.test(tag)));
+        if(!dragging) return;
+        // анимация появления «держит» окно на месте — на время жеста выключаем её
+        panel.classList.add('sheet-dragging');
+        panel.classList.remove('sheet-dismiss');
+        panel.style.transition = 'none';
+        if(document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      }
+      e.preventDefault();
+      var d = Math.max(0, dy);
+      panel.style.transform = 'translateY('+d+'px)';
+      setFade(1 - Math.min(1, d / Math.max(200, panel.offsetHeight)));
+    }, {passive: false});
+    var end = function(){
+      if(!dragging) return;
+      dragging = false;
+      var h = panel.offsetHeight;
+      var v = dy / Math.max(1, Date.now()-t0);
+      if(dy > Math.min(140, h*0.3) || (v > 0.55 && dy > 40)){
+        // окно улетает вниз той же пружинистой анимацией, что и при открытии, и только потом закрывается
+        var dur = v > 1.2 ? 300 : 380;
+        panel.style.transition = 'none';
+        panel.style.setProperty('--drag-y', Math.max(0, dy)+'px');
+        panel.style.setProperty('--dismiss-dur', dur+'ms');
+        panel.style.transform = 'translateY(calc(100% + 40px))';
+        panel.classList.add('sheet-dismiss');
+        setFade(0, dur);
+        var done = false;
+        var finish = function(){ if(done) return; done = true; onClose(); };
+        panel.addEventListener('animationend', function ae(ev){ if(ev.target===panel){ panel.removeEventListener('animationend', ae); finish(); } });
+        setTimeout(finish, dur + 80);
+      } else {
+        panel.style.transition = 'transform .38s cubic-bezier(.32,.72,0,1)';
+        panel.style.transform = '';
+        setFade(1, 380);
+      }
+    };
+    panel.addEventListener('touchend', end);
+    panel.addEventListener('touchcancel', end);
+  }
+
+  // «Сегодня»: листаем к текущему периоду в нужную сторону, а если он уже открыт — подсвечиваем сегодняшний день
+  function goToday(){
+    var t = todayD();
+    var curKey = state.calView==='week' ? curWeekStart() : fmt(startOfMonth(state.viewDate));
+    var newKey = state.calView==='week' ? weekKey(t) : fmt(startOfMonth(t));
+    if(curKey===newKey){
+      var cell = app.querySelector('.cal-cell.today');
+      if(cell){
+        cell.classList.remove('flash'); void cell.offsetWidth; cell.classList.add('flash');
+        if(window.innerWidth<=820 && cell.getBoundingClientRect().top > window.innerHeight - 80) cell.scrollIntoView({behavior: animMode()==='full' ? 'smooth' : 'auto', block: 'center'});
+      }
+      return;
+    }
+    state.viewDate = startOfMonth(t);
+    state.weekStart = weekKey(t);
+    pendingAnim = newKey > curKey ? 'slide-next' : 'slide-prev';
+    render();
+  }
+
   function changeMonth(delta){
-    state.viewDate = new Date(state.viewDate.getFullYear(), state.viewDate.getMonth()+delta, 1);
+    if(state.calView==='week'){
+      state.weekStart = fmt(addDays(parseD(curWeekStart()), 7*delta));
+      state.viewDate = startOfMonth(addDays(parseD(state.weekStart), 3));
+    } else {
+      state.viewDate = new Date(state.viewDate.getFullYear(), state.viewDate.getMonth()+delta, 1);
+    }
     pendingAnim = delta>0 ? 'slide-next' : 'slide-prev';
     render();
   }
@@ -5389,10 +6396,17 @@
     state.confirmDeleteId = null; state.renameBoardId = null; state.confirmCard = null; state.pendingBackup = null;
     render();
   }
+  function closeTopModal(){
+    var tops = app.querySelectorAll('.overlay');
+    var top = tops[tops.length-1];
+    var btn = top && top.querySelector('.modal > .close-x[data-act="close-modal"]');
+    if(btn) handleAction(btn, {stopPropagation: function(){}, preventDefault: function(){}});
+    else closeAllModals();
+  }
   function closeAllModals(){
     state.modal = null; state.menuOpen = false; state.editing = null;
     state.transactionTarget = null; state.scheduleTimeTarget = null; state.detailTarget = null;
-    state.renewTarget = null; state.incomeTarget = null; state.subTarget = null;
+    state.renewTarget = null; state.incomeTarget = null; state.subTarget = null; state.balanceTarget = null;
     state.boardTypePickerOpen = false;
     render();
   }
@@ -5409,10 +6423,12 @@
         changeMonth(-1); break;
       case 'next-month':
         changeMonth(1); break;
+      case 'cal-view':
+        setCalView(el.dataset.view);
+        break;
       case 'today':
-        state.viewDate = startOfMonth(todayD());
-        pendingAnim = 'enter';
-        render(); break;
+        goToday();
+        break;
       case 'finance-view':
         state.financeView = el.dataset.view === 'expenses' ? 'expenses' : 'income';
         state.search = '';
@@ -5427,8 +6443,12 @@
       case 'open-add':
         state.modal = 'add'; state.menuOpen = false; state.editing = null; state.scheduleTimeTarget = null; render(); break;
       case 'close-modal':
+        if(state.modal==='onboarding'){ markOnboarded(); state.onb = null; }
+        // окно пополнения, открытое из «Баланса», возвращает обратно в «Баланс»
+        var backTo = (state.modal==='balance-op' && state.balanceTarget && state.balanceTarget.from==='balance') ? 'balance' : null;
         state.detailTarget = null; state.modal = null; state.editing = null; state.transactionTarget = null; state.scheduleTimeTarget = null;
-        state.renewTarget = null; state.incomeTarget = null; state.subTarget = null;
+        state.renewTarget = null; state.incomeTarget = null; state.subTarget = null; state.balanceTarget = null;
+        state.modal = backTo;
         render(); break;
       case 'open-menu':
         state.menuOpen = true; state.modal = null; state.newBoardType = 'lessons'; state.boardTypePickerOpen = false; render(); break;
@@ -5532,6 +6552,18 @@
         state.transactionTarget = {kind: el.dataset.kind, id: el.dataset.id, subId: el.dataset.sub || null};
         state.modal = 'transaction';
         render();
+        break;
+      case 'balance-op':
+        ev.stopPropagation();
+        state.balanceTarget = {id: el.dataset.id, mode: 'topup', from: state.modal};
+        state.modal = 'balance-op';
+        render();
+        break;
+      case 'balance-mode':
+        if(state.balanceTarget){ state.balanceTarget.mode = el.dataset.mode; render(); }
+        break;
+      case 'delete-balance-entry':
+        (function(balId, hid){ withUndo(T('Операция удалена'), function(){ deleteBalanceEntry(activeBoard(), balId, hid); }); })(el.dataset.bal, el.dataset.id);
         break;
       case 'open-balance':
         state.modal = 'balance'; state.menuOpen = false; state.editing = null; render(); break;
@@ -5644,6 +6676,90 @@
       case 'backup-replace':
         applyBackup('replace');
         break;
+      case 'set-anim':
+        try{ localStorage.setItem(ANIM_KEY, el.dataset.anim); }catch(e){}
+        applyAnimMode();
+        render();
+        break;
+      case 'onb-next':
+        if(state.onb){
+          var stp = onbSteps()[state.onb.i];
+          if(stp==='types' && !state.onb.types.length) break;
+          if(stp==='account'){ onbReadAccount(); state.onb.acc.useAccount = true; }
+          state.onb.i++; state.onb.back = false; render();
+        }
+        break;
+      case 'onb-skip-acc':
+        if(state.onb){ onbReadAccount(); state.onb.acc.useAccount = false; state.onb.i++; state.onb.back = false; render(); }
+        break;
+      case 'onb-back':
+        if(state.onb && state.onb.i>0){ if(onbSteps()[state.onb.i]==='account') onbReadAccount(); state.onb.i--; state.onb.back = true; render(); }
+        break;
+      case 'onb-type':
+        (function(){
+          // выбор без перерисовки окна, чтобы анимация шага не повторялась
+          var t = el.dataset.type, list = state.onb.types, k = list.indexOf(t);
+          if(k===-1) list.push(t); else list.splice(k, 1);
+          el.classList.toggle('on', k===-1);
+          el.setAttribute('aria-pressed', String(k===-1));
+          var nx = document.getElementById('onb-types-next');
+          if(nx) nx.disabled = !list.length;
+          var dotsEl = el.closest('.onb-modal').querySelector('.onb-dots');
+          if(dotsEl) dotsEl.innerHTML = onbSteps().map(function(_, j){ return '<i class="'+(j===state.onb.i?'on':(j<state.onb.i?'done':''))+'"></i>'; }).join('');
+        })();
+        break;
+      case 'onb-lang':
+        try{ localStorage.setItem(LANG_KEY, el.dataset.lang); }catch(e){}
+        location.reload();
+        break;
+      case 'onb-finish':
+        finishOnboarding();
+        break;
+      case 'show-onboarding':
+        startOnboarding();
+        break;
+      case 'version-tap':
+        versionTap(el);
+        break;
+      case 'open-admin':
+        if(isAdmin()){ state.modal = 'admin'; state.menuOpen = false; render(); }
+        break;
+      case 'admin-date-set':
+        (function(){ var v = document.getElementById('adm-date').value; if(isValidDs(v)){ setFakeToday(v); showToast('Тестовая дата: '+fmtHuman(v)); } })();
+        break;
+      case 'admin-date-shift':
+        setFakeToday(fmt(addDays(todayD(), Number(el.dataset.days))));
+        showToast('Тестовая дата: '+fmtHuman(FAKE_TODAY));
+        break;
+      case 'admin-date-reset':
+        setFakeToday('');
+        showToast('Вернулась настоящая дата');
+        break;
+      case 'admin-streak-set':
+        (function(){
+          var v = Math.max(0, Math.min(3650, parseInt(document.getElementById('adm-streak').value, 10) || 0));
+          setStreakTo(v, document.getElementById('adm-streak-today').checked, loadStreak().best);
+          showToast('Огонёк: '+v); render();
+        })();
+        break;
+      case 'admin-streak-reset':
+        saveStreak({days: [], best: 0}); showToast('Огонёк сброшен'); render();
+        break;
+      case 'admin-tpl':
+        addTemplate(el.dataset.kind);
+        break;
+      case 'admin-tpl-remove':
+        state.modal = null;
+        removeTestBoards();
+        break;
+      case 'admin-exit':
+        try{ localStorage.removeItem(ADMIN_KEY); localStorage.removeItem(STREAK_FREE_KEY); }catch(e){}
+        state.modal = null;
+        setFakeToday('');
+        showToast('Админ-режим выключен');
+        break;
+      case 'open-streak':
+        state.modal = 'streak'; state.menuOpen = false; render(); break;
       case 'toggle-privacy':
         togglePrivacy();
         break;
@@ -5883,7 +6999,7 @@
     var go = function(){ render(); };
     // плавная смена, как в iOS (если браузер умеет)
     var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if(document.startViewTransition && !reduce) document.startViewTransition(go); else go();
+    if(document.startViewTransition && !reduce && animMode()==='full') document.startViewTransition(go); else go();
     showToast(state.privacy ? T('Суммы скрыты') : T('Суммы показаны'));
   }
   function todayBtnHtml(){
@@ -5896,7 +7012,7 @@
     bar.innerHTML =
       '<button class="icon-btn" data-act="open-menu" aria-label="'+T('Доски')+'">☰</button>'+
       T('<button class="icon-btn" data-act="prev-month" aria-label="Предыдущий месяц">‹</button>')+
-      '<div class="label mono">'+MONTH_NAMES[vd.getMonth()]+' '+vd.getFullYear()+'</div>'+
+      '<div class="label mono">'+periodLabel(true)+'</div>'+
       T('<button class="icon-btn" data-act="next-month" aria-label="Следующий месяц">›</button>')+
       todayBtnHtml();
     checkMiniBar();
@@ -5937,11 +7053,41 @@
     if(ev.key!=='Escape') return;
     if(quick.open){ closeQuick(); return; }
     if(anyDialog()){ closeDialogs(); return; }
-    if(state.modal || state.menuOpen){ closeAllModals(); }
+    if(state.modal || state.menuOpen){ closeTopModal(); }
   });
 
   applyTheme();
+  applyAnimMode();
   ensureQuick();
   setInterval(updateNowHighlight, 15000);
   loadData();
+}
+
+// ---------- запуск: сначала подгружаем словарь выбранного языка из languages/ ----------
+(function(){
+  var lang = 'ru';
+  try{
+    var v = localStorage.getItem('lessoncal_lang');
+    if(v==='ru' || v==='uk' || v==='en') lang = v;
+    else {
+      var list = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language || 'en'];
+      lang = 'en';
+      for(var i=0;i<list.length;i++){
+        var c = String(list[i]||'').toLowerCase().slice(0,2);
+        if(c==='uk'){ lang = 'uk'; break; }
+        if(c==='ru' || c==='be'){ lang = 'ru'; break; }
+        if(c==='en'){ lang = 'en'; break; }
+      }
+    }
+  }catch(e){}
+  var loaded = window.LESSONCAL_I18N && window.LESSONCAL_I18N[lang];
+  if(lang==='ru' || loaded){ lessoncalBoot(); return; }
+  var started = false;
+  var go = function(){ if(started) return; started = true; lessoncalBoot(); };
+  var sc = document.createElement('script');
+  sc.src = 'languages/' + lang + '.js';
+  sc.onload = go;
+  sc.onerror = go;           // нет файла (например, офлайн без кэша) — запускаемся по-русски
+  setTimeout(go, 4000);      // на всякий случай не ждём вечно
+  document.head.appendChild(sc);
 })();
