@@ -1,11 +1,27 @@
 function lessoncalBoot(){
   "use strict";
-  // тестовая дата из админ-панели (только если включён админ-режим)
-  var FAKE_TODAY = (function(){ try{ var v = localStorage.getItem('lessoncal_fake_today'); return (localStorage.getItem('lessoncal_admin')==='1' && /^\d{4}-\d{2}-\d{2}$/.test(v||'')) ? v : ''; }catch(e){ return ''; } })();
+  // тестовая дата из «Экспериментальных настроек»
+  // тестовые дата и время: сдвиг часов приложения относительно настоящих (в мс); 0 — настоящее время
+  var FAKE_OFFSET = (function(){
+    try{
+      localStorage.removeItem('lessoncal_admin'); localStorage.removeItem('lessoncal_streak_free');
+      var off = Number(localStorage.getItem('lessoncal_fake_offset')) || 0;
+      // старый формат: только дата
+      var v = localStorage.getItem('lessoncal_fake_today');
+      if(/^\d{4}-\d{2}-\d{2}$/.test(v||'')){
+        var n = new Date(), f = v.split('-');
+        off = new Date(+f[0], +f[1]-1, +f[2], n.getHours(), n.getMinutes(), n.getSeconds()) - n;
+        localStorage.setItem('lessoncal_fake_offset', String(off));
+        localStorage.removeItem('lessoncal_fake_today');
+      }
+      return off;
+    }catch(e){ return 0; }
+  })();
 
   // ---------- языки интерфейса ----------
   var LANG_KEY = 'lessoncal_lang';
-  var LANGS = ['ru','uk','en'];
+  var LANGS = ['ru','uk','en','de','es','fr','it','pl','pt'];
+  var LANG_NAMES = {ru:'Русский', uk:'Українська', en:'English', de:'Deutsch', es:'Español', fr:'Français', it:'Italiano', pl:'Polski', pt:'Português'};
   function getLangPref(){
     try{
       var v = localStorage.getItem(LANG_KEY);
@@ -13,27 +29,29 @@ function lessoncalBoot(){
       return 'auto'; // по умолчанию — язык системы
     }catch(e){ return 'auto'; }
   }
+  // язык системы (основной язык телефона/браузера); если такого перевода нет — английский
   function detectSystemLang(){
-    var list = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language || 'en'];
-    for(var i=0;i<list.length;i++){
-      var c = String(list[i]||'').toLowerCase().slice(0,2);
-      if(c==='uk') return 'uk';
-      if(c==='ru' || c==='be') return 'ru';
-      if(c==='en') return 'en';
-    }
-    return 'en';
+    var first = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
+    var c = String(first).toLowerCase().slice(0,2);
+    return LANGS.indexOf(c)!==-1 ? c : 'en';
   }
   var LANG_PREF = getLangPref();
   var LANG = LANG_PREF==='auto' ? detectSystemLang() : LANG_PREF;
-  var LOCALE = {ru:'ru-RU', uk:'uk-UA', en:'en-GB'}[LANG];
+  try{ if(LANG!=='ru' && LANG!=='en' && !(window.LESSONCAL_I18N && window.LESSONCAL_I18N[LANG])) LANG = 'en'; }catch(e){ LANG = 'en'; }
+  var LOCALE = {ru:'ru-RU', uk:'uk-UA', en:'en-GB', de:'de-DE', es:'es-ES', fr:'fr-FR', it:'it-IT', pl:'pl-PL', pt:'pt-BR'}[LANG] || 'en-GB';
+  try{ if(LANG==='pt' && /^pt-pt/i.test(navigator.language||'')) LOCALE = 'pt-PT'; if(LANG==='en' && /^en-us/i.test(navigator.language||'')) LOCALE = 'en-US'; }catch(e){}
   // словари переводов лежат в папке languages/ (en.js, uk.js) и подгружаются до запуска приложения
   var I18N_EXT = (typeof window!=='undefined' && window.LESSONCAL_I18N) || {};
-  var I18N = {en: I18N_EXT.en || {}, uk: I18N_EXT.uk || {}};
+  var I18N = {};
+  LANGS.forEach(function(l){ if(l!=='ru') I18N[l] = I18N_EXT[l] || {}; });
   // перевод: ключ — русская фраза
+  // перевод; если фразы нет в словаре выбранного языка — берём английскую
   function T(s){
     if(LANG==='ru') return s;
-    var d = I18N[LANG];
-    return (d && Object.prototype.hasOwnProperty.call(d, s)) ? d[s] : s;
+    var d = I18N[LANG], has = Object.prototype.hasOwnProperty;
+    if(d && has.call(d, s)) return d[s];
+    var en = I18N.en;
+    return (en && has.call(en, s)) ? en[s] : s;
   }
   try{ document.documentElement.lang = LANG; document.title = T('Календарь занятий'); }catch(e){}
 
@@ -45,9 +63,32 @@ function lessoncalBoot(){
     plum:'#b06aa8', steel:'#7d97ad', berry:'#d15a7a', forest:'#6b9e5e'
   };
   var COLOR_KEYS = Object.keys(COLORS);
-  var CURRENCIES = {UAH:'₴', USD:'$', EUR:'€', GBP:'£', PLN:'zł', RUB:'₽'};
+  var CURRENCIES = {UAH:'₴', USD:'$', EUR:'€', GBP:'£', PLN:'zł', RUB:'₽',
+    CHF:'CHF', CZK:'Kč', SEK:'kr', NOK:'NOK', DKK:'DKK', HUF:'Ft', RON:'lei', TRY:'₺', KZT:'₸', GEL:'₾', MDL:'MDL',
+    BRL:'R$', MXN:'MX$', CAD:'C$', AUD:'A$', JPY:'¥', CNY:'CN¥', INR:'₹'};
   var CURRENCY_KEYS = Object.keys(CURRENCIES);
-  var DEFAULT_CURRENCY = 'UAH';
+  var SHOWN_CURRENCIES = ['UAH','USD','EUR','GBP','PLN','CHF','CZK','TRY','KZT','BRL','CAD','RUB'];
+  // валюта по умолчанию: выбранная в настройках или по стране из настроек телефона
+  var CURRENCY_KEY = 'lessoncal_currency';
+  function detectCurrency(){
+    var REG = {UA:'UAH', US:'USD', GB:'GBP', PL:'PLN', CH:'CHF', LI:'CHF', CZ:'CZK', SE:'SEK', NO:'NOK', DK:'DKK', HU:'HUF',
+      RO:'RON', TR:'TRY', KZ:'KZT', GE:'GEL', MD:'MDL', BR:'BRL', MX:'MXN', CA:'CAD', AU:'AUD', JP:'JPY', CN:'CNY', IN:'INR'};
+    var EURO = ['DE','AT','FR','ES','IT','PT','NL','BE','LU','IE','FI','EE','LV','LT','SK','SI','GR','CY','MT','HR'];
+    var list = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language || ''];
+    for(var i=0;i<list.length;i++){
+      var m = String(list[i]||'').match(/^([a-z]{2,3})[-_]([A-Za-z]{2})\b/);
+      if(!m) continue;
+      var r = m[2].toUpperCase();
+      if(REG[r]) return REG[r];
+      if(EURO.indexOf(r)!==-1) return 'EUR';
+    }
+    var byLang = {uk:'UAH', ru:'UAH', en:'USD', pl:'PLN', de:'EUR', es:'EUR', fr:'EUR', it:'EUR', pt:'BRL'};
+    return byLang[LANG] || 'UAH';
+  }
+  var DEFAULT_CURRENCY = (function(){
+    try{ var v = localStorage.getItem(CURRENCY_KEY); if(v && CURRENCIES[v]) return v; }catch(e){}
+    return detectCurrency();
+  })();
   var DOW_LABELS = [T('Пн'),T('Вт'),T('Ср'),T('Чт'),T('Пт'),T('Сб'),T('Вс')];
   var DOW_VALUES = [1,2,3,4,5,6,0];
   var STORAGE_KEY = 'lessoncal_boards_v1';
@@ -116,7 +157,7 @@ function lessoncalBoot(){
     menuOpen: false,
     storageOk: true,
     newBoardType: 'lessons',
-    financeView: 'income',
+    financeView: 'income', expFilter: 'all', addKind: 'expense',
     search: '',
     confirmDeleteId: null,
     renameBoardId: null,
@@ -143,24 +184,45 @@ function lessoncalBoot(){
   function pad(n){ return String(n).padStart(2,'0'); }
   function fmt(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
   function parseD(s){ var p=s.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]); }
+  function nowD(){ return FAKE_OFFSET ? new Date(Date.now() + FAKE_OFFSET) : new Date(); }
   function todayD(){
-    if(FAKE_TODAY){ var f = FAKE_TODAY.split('-'); return new Date(+f[0], +f[1]-1, +f[2]); }
-    var n=new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate());
+    var n = nowD(); return new Date(n.getFullYear(), n.getMonth(), n.getDate());
   }
   function addDays(d,n){ var r=new Date(d); r.setDate(r.getDate()+n); return r; }
   function startOfMonth(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
   var MONTH_NAMES_GEN = [T('января'),T('февраля'),T('марта'),T('апреля'),T('мая'),T('июня'),T('июля'),T('августа'),T('сентября'),T('октября'),T('ноября'),T('декабря')];
   function fmtHuman(ds){
     var d = parseD(ds);
-    return d.getDate()+' '+MONTH_NAMES_GEN[d.getMonth()]+' '+d.getFullYear();
+    return d.getDate()+(LANG==='de' ? '.' : '')+' '+MONTH_NAMES_GEN[d.getMonth()]+' '+d.getFullYear();
   }
   function fmtHumanNoYear(ds){
     var d = parseD(ds);
-    return d.getDate()+' '+MONTH_NAMES_GEN[d.getMonth()];
+    return d.getDate()+(LANG==='de' ? '.' : '')+' '+MONTH_NAMES_GEN[d.getMonth()];
+  }
+  // ---------- формат времени: 24 часа или 12 (AM/PM) ----------
+  var TIME12_KEY = 'lessoncal_time12';
+  function use12h(){
+    try{
+      var v = localStorage.getItem(TIME12_KEY);
+      if(v==='1') return true;
+      if(v==='0') return false;
+      return !!new Intl.DateTimeFormat(navigator.language || 'en', {hour: 'numeric'}).resolvedOptions().hour12;
+    }catch(e){ return false; }
+  }
+  var TIME12 = use12h();
+  // «14:30» → «2:30 PM» (в 12-часовом режиме); noAp — без AM/PM
+  function fmtTime(v, noAp){
+    if(!v || !TIME12) return v || '';
+    var p = String(v).split(':'), h = parseInt(p[0], 10);
+    if(isNaN(h)) return v;
+    return (h%12 || 12) + ':' + (p[1] || '00') + (noAp ? '' : ' ' + (h<12 ? 'AM' : 'PM'));
   }
   function timeRangeStr(s){
     if(!s.timeStart) return '';
-    return s.timeStart + (s.timeEnd ? '–'+s.timeEnd : '');
+    if(!s.timeEnd) return fmtTime(s.timeStart);
+    // «4:00–5:00 PM», если обе половины в одной части дня
+    var same = TIME12 && (parseInt(s.timeStart,10)<12)===(parseInt(s.timeEnd,10)<12);
+    return fmtTime(s.timeStart, same) + '–' + fmtTime(s.timeEnd);
   }
   // ручной ввод времени: "1430", "14:30", "9", "9.5" -> "14:30", "09:00", "09:05"; пусто -> ''; ошибка -> null
   function normalizeTime(raw){
@@ -180,6 +242,17 @@ function lessoncalBoot(){
   function timeInputHtml(name, value){
     var p = String(value||'').split(':');
     var h = p[0] || '', m = p[1] || '';
+    if(TIME12){
+      var hn = parseInt(h, 10), ap = (!isNaN(hn) && hn>=12) ? 'PM' : 'AM';
+      if(!isNaN(hn)) h = pad(hn%12 || 12);
+      return '<div class="time-pair h12" data-time="'+name+'">'+
+        T('<input type="text" class="tp-h" inputmode="numeric" autocomplete="off" maxlength="2" placeholder="чч" aria-label="Часы" value="')+escapeHtml(h)+'">'+
+        '<span class="tp-sep">:</span>'+
+        T('<input type="text" class="tp-m" inputmode="numeric" autocomplete="off" maxlength="2" placeholder="мм" aria-label="Минуты" value="')+escapeHtml(m)+'">'+
+        '<button type="button" class="tp-ap" data-act="tp-ap" data-ap="'+ap+'" aria-label="AM / PM">'+ap+'</button>'+
+        '<input type="hidden" name="'+name+'" value="'+escapeHtml(value||'')+'">'+
+      '</div>';
+    }
     return '<div class="time-pair" data-time="'+name+'">'+
       T('<input type="text" class="tp-h" inputmode="numeric" autocomplete="off" maxlength="2" placeholder="чч" aria-label="Часы" value="')+escapeHtml(h)+'">'+
       '<span class="tp-sep">:</span>'+
@@ -197,8 +270,11 @@ function lessoncalBoot(){
   // дата нужного дня недели на неделе ref (по умолчанию — текущей)
   function dateOfWeekday(dow, ref){ return addDays(parseD(weekKey(ref || todayD())), DOW_VALUES.indexOf(dow)); }
   function plural(n, one, few, many){
-    if(LANG==='en') return Math.abs(n)===1 ? one : many;
+    if(LANG==='fr' || LANG==='pt') return Math.abs(n)<2 ? one : many;
+    if(LANG!=='ru' && LANG!=='uk' && LANG!=='pl') return Math.abs(n)===1 ? one : many;
     var a = Math.abs(n)%100, b = a%10;
+    // польский: «1 dzień», «2 dni», «5 dni», «21 dni» — «один» только для единицы
+    if(LANG==='pl') return Math.abs(n)===1 ? one : ((b>1 && b<5 && !(a>10 && a<20)) ? few : many);
     if(a>10 && a<20) return many;
     if(b>1 && b<5) return few;
     if(b===1) return one;
@@ -206,10 +282,11 @@ function lessoncalBoot(){
   }
 
   function uid(){ return 'id'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
-  var BOARD_TYPES = ['lessons','events','finance','schedule','planner','subs','habits'];
+  // «подписки» больше не отдельная доска — они живут в «Финансах» (тип расхода «Подписка»)
+  var BOARD_TYPES = ['lessons','events','finance','schedule','planner','habits'];
   function isSchedType(t){ return t==='schedule' || t==='planner'; }
   var BOARD_TYPE_LABELS = {lessons:T('Занятия'), events:T('События'), finance:T('Финансы'), schedule:T('Расписание'), planner:T('Планер задач'), subs:T('Подписки'), habits:T('Привычки')};
-  function normBoardType(t){ return BOARD_TYPES.indexOf(t)!==-1 ? t : 'lessons'; }
+  function normBoardType(t){ return (BOARD_TYPES.indexOf(t)!==-1 || t==='subs') ? t : 'lessons'; }
   function newBoard(name, type){
     var t = normBoardType(type);
     return {id: uid(), name: name, type: t, subjects: [], events: [], income: [], expenses: [], balances: [], rates: {}, wheelCurrency: '', scheduleItems: [], subs: [], habits: []};
@@ -379,49 +456,133 @@ function lessoncalBoot(){
     return b;
   }
 
+  // курс: прямой → обратный → через третью валюту → из последней загрузки курсов
   function getRate(ab, from, to){
     if(from===to) return 1;
-    var direct = ab.rates[from+'_'+to];
-    if(typeof direct==='number' && direct>0) return direct;
-    var inverse = ab.rates[to+'_'+from];
-    if(typeof inverse==='number' && inverse>0) return 1/inverse;
+    var rates = (ab && ab.rates) || {};
+    var one = function(f, t){
+      var d = rates[f+'_'+t]; if(typeof d==='number' && d>0) return d;
+      var i = rates[t+'_'+f]; if(typeof i==='number' && i>0) return 1/i;
+      return null;
+    };
+    var r = one(from, to);
+    if(r!==null) return r;
+    for(var k=0; k<CURRENCY_KEYS.length; k++){
+      var mid = CURRENCY_KEYS[k];
+      if(mid===from || mid===to) continue;
+      var a1 = one(from, mid), a2 = a1!==null ? one(mid, to) : null;
+      if(a1!==null && a2!==null) return a1*a2;
+    }
+    var c = loadRatesCache();
+    if(c && c.rates[from]>0 && c.rates[to]>0) return c.rates[to]/c.rates[from];
     return null;
   }
 
+  // ---------- курсы валют: подтягиваются при каждом запуске ----------
+  var RATES_CACHE_KEY = 'lessoncal_rates_cache';
+  var ratesCacheMem = null;
+  function loadRatesCache(){
+    if(ratesCacheMem) return ratesCacheMem;
+    try{
+      var c = JSON.parse(localStorage.getItem(RATES_CACHE_KEY) || 'null');
+      if(c && c.rates && typeof c.rates==='object' && typeof c.ts==='number') ratesCacheMem = c;
+    }catch(e){}
+    return ratesCacheMem;
+  }
+  // в какой валюте доска показывает итоги (как у колеса расходов)
+  function boardDisplayCurrency(b){
+    if(b.wheelCurrency && CURRENCY_KEYS.indexOf(b.wheelCurrency)!==-1) return b.wheelCurrency;
+    var curs = currenciesUsed(b.expenses);
+    return curs[0] || (b.balances[0] && b.balances[0].currency) || DEFAULT_CURRENCY;
+  }
+  // все валюты, которые встречаются на доске финансов
+  function boardCurrencies(b){
+    var seen = {}, out = [];
+    var add = function(c){ if(c && !seen[c] && CURRENCY_KEYS.indexOf(c)!==-1){ seen[c] = true; out.push(c); } };
+    add(boardDisplayCurrency(b));
+    (b.expenses||[]).forEach(function(x){ add(x.currency); });
+    (b.income||[]).forEach(function(x){ add(x.currency); });
+    (b.balances||[]).forEach(function(x){ add(x.currency); });
+    state.boards.forEach(function(sb){
+      (sb.subs||[]).forEach(function(x){ if(x.financeLink && x.financeLink.boardId===b.id) add(x.currency); });
+    });
+    return out;
+  }
+  // записать свежие курсы в доски финансов: «валюта → валюта итогов доски»
+  function applyRatesToBoards(cache, onlyBoard){
+    var n = 0;
+    state.boards.forEach(function(b){
+      if(b.type!=='finance' || (onlyBoard && b!==onlyBoard)) return;
+      var disp = boardDisplayCurrency(b);
+      if(!(cache.rates[disp]>0)) return;
+      boardCurrencies(b).forEach(function(c){
+        if(c===disp || !(cache.rates[c]>0)) return;
+        var v = cache.rates[disp]/cache.rates[c];
+        v = Number(v.toPrecision(6));
+        // обратный курс, если был введён вручную, больше не нужен — иначе в списке будет путаница
+        delete b.rates[disp+'_'+c];
+        if(b.rates[c+'_'+disp]!==v){ b.rates[c+'_'+disp] = v; n++; }
+      });
+      // остальные сохранённые пары тоже освежаем
+      Object.keys(b.rates).forEach(function(k){
+        var pr = k.split('_');
+        if(pr.length!==2 || !(cache.rates[pr[0]]>0) || !(cache.rates[pr[1]]>0)) return;
+        var v2 = Number((cache.rates[pr[1]]/cache.rates[pr[0]]).toPrecision(6));
+        if(b.rates[k]!==v2){ b.rates[k] = v2; n++; }
+      });
+      b.ratesAt = cache.ts;
+    });
+    return n;
+  }
   var ratesLoading = false;
-  function refreshRatesFromApi(display){
+  function fetchRates(){
+    if(typeof fetch!=='function') return Promise.reject(new Error('nofetch'));
+    if(typeof navigator!=='undefined' && navigator.onLine===false) return Promise.reject(new Error('offline'));
+    return fetch('https://open.er-api.com/v6/latest/USD')
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if(!data || data.result!=='success' || !data.rates) throw new Error('bad');
+        var rates = {};
+        CURRENCY_KEYS.forEach(function(c){ if(typeof data.rates[c]==='number' && data.rates[c]>0) rates[c] = data.rates[c]; });
+        rates.USD = 1;
+        var cache = {ts: Date.now(), rates: rates};
+        ratesCacheMem = cache;
+        try{ localStorage.setItem(RATES_CACHE_KEY, JSON.stringify(cache)); }catch(e){}
+        return cache;
+      });
+  }
+  // тихое обновление при запуске: без уведомлений и без перерисовки открытой формы
+  function autoRefreshRates(){
+    if(!state.boards.some(function(b){ return b.type==='finance'; })) return;
+    var c = loadRatesCache();
+    if(c && Date.now()-c.ts < 10*60*1000) return; // только что обновляли
+    fetchRates().then(function(cache){
+      applyRatesToBoards(cache);
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({boards: state.boards, activeBoardId: state.activeBoardId})); }catch(e){}
+      var busy = document.activeElement && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
+      if(!state.modal && !busy && !quick.open) render();
+    }).catch(function(){});
+  }
+  // кнопка «Обновить курсы» — с уведомлениями
+  function refreshRatesFromApi(){
     if(ratesLoading) return;
     if(typeof fetch!=='function'){ showToast(T('Автообновление курсов недоступно в этом браузере')); return; }
     if(typeof navigator!=='undefined' && navigator.onLine===false){ showToast(T('Нет интернета — курсы валют можно обновить только онлайн')); return; }
     ratesLoading = true;
     showToast(T('Обновляем курсы…'));
-    fetch('https://open.er-api.com/v6/latest/'+encodeURIComponent(display))
-      .then(function(r){ return r.json(); })
-      .then(function(data){
-        ratesLoading = false;
-        if(!data || data.result!=='success' || !data.rates){
-          showToast(T('Не удалось получить курсы'));
-          return;
-        }
-        var ab = activeBoard();
-        var updated = 0;
-        CURRENCY_KEYS.forEach(function(c){
-          if(c!==display && typeof data.rates[c]==='number' && data.rates[c]>0){
-            ab.rates[c+'_'+display] = 1/data.rates[c];
-            updated++;
-          }
-        });
-        showToast(updated ? T('Курсы обновлены') : T('Курсы не изменились'));
-        saveData();
-      })
-      .catch(function(){
-        ratesLoading = false;
-        showToast(T('Не удалось получить курсы — проверьте подключение к интернету'));
-      });
+    fetchRates().then(function(cache){
+      ratesLoading = false;
+      var n = applyRatesToBoards(cache, activeBoard());
+      showToast(n ? T('Курсы обновлены') : T('Курсы не изменились'));
+      saveData();
+    }).catch(function(){
+      ratesLoading = false;
+      showToast(T('Не удалось получить курсы — проверьте подключение к интернету'));
+    });
   }
 
   // ---------- scheduling logic (lessons) ----------
-  function nowHM(){ var n=new Date(); return pad(n.getHours())+':'+pad(n.getMinutes()); }
+  function nowHM(){ var n=nowD(); return pad(n.getHours())+':'+pad(n.getMinutes()); }
   function occurrencePast(ds, subj){
     var todayStr = fmt(todayD());
     if(ds < todayStr) return true;
@@ -593,6 +754,130 @@ function lessoncalBoot(){
     return out;
   }
 
+
+  // ---------- калькулятор в полях суммы: «120+45», «3*85», «1000-250» ----------
+  function calcEval(str){
+    var x = String(str==null ? '' : str).replace(/\s+/g, '').replace(/,/g, '.').replace(/[×xXх]/g, '*').replace(/[÷:]/g, '/').replace(/[−–]/g, '-');
+    if(!x) return null;
+    if(!/^[0-9.+\-*\/()]+$/.test(x)) return NaN;
+    var i = 0;
+    var factor = function(){
+      if(x[i]==='-'){ i++; return -factor(); }
+      if(x[i]==='+'){ i++; return factor(); }
+      if(x[i]==='('){ i++; var v = expr(); if(x[i]!==')') throw 0; i++; return v; }
+      var m = x.slice(i).match(/^(\d+\.?\d*|\.\d+)/);
+      if(!m) throw 0;
+      i += m[0].length;
+      return parseFloat(m[0]);
+    };
+    var term = function(){
+      var v = factor();
+      while(x[i]==='*' || x[i]==='/'){ var op = x[i++]; var r = factor(); v = op==='*' ? v*r : v/r; }
+      return v;
+    };
+    var expr = function(){
+      var v = term();
+      while(x[i]==='+' || x[i]==='-'){ var op = x[i++]; var r = term(); v = op==='+' ? v+r : v-r; }
+      return v;
+    };
+    try{
+      var v = expr();
+      if(i!==x.length || !isFinite(v)) return NaN;
+      return Math.round(v*100)/100;
+    }catch(e){ return NaN; }
+  }
+  function calcHasOp(str){ return /[\d)]\s*[+\-*\/×xXх÷:−]\s*[\d(.]/.test(String(str||'')); }
+  var CALC_SEL = 'input[type=number][name=amount], input[type=number][name=recAmount], input[type=number][name=budget], input[type=number].sf-amount, input[type=number]#onb-acc-amount';
+  // числовые поля суммы превращаются в текстовые: так можно вводить «+ − × ÷»
+  function enhanceCalcInputs(root){
+    (root || document).querySelectorAll(CALC_SEL).forEach(function(inp){
+      var min = parseFloat(inp.getAttribute('min'));
+      inp.type = 'text';
+      inp.setAttribute('inputmode', 'decimal');
+      inp.setAttribute('autocomplete', 'off');
+      inp.removeAttribute('step'); inp.removeAttribute('min');
+      inp.classList.add('calc-input');
+      if(!isNaN(min)) inp.dataset.min = String(min);
+    });
+  }
+  function calcCheck(inp){
+    var v = inp.value.trim(), r = calcEval(v), msg = '';
+    if(v && (r===null || isNaN(r))) msg = T('Не получается посчитать — проверьте выражение');
+    else if(v && inp.dataset.min){
+      var mn = parseFloat(inp.dataset.min);
+      if(mn>0 && r<mn) msg = T('Сумма должна быть больше нуля');
+      else if(r<mn) msg = T('Сумма не может быть отрицательной');
+    }
+    inp.setCustomValidity(msg);
+    return r;
+  }
+  // посчитать выражение и оставить в поле только результат
+  function calcFinalize(inp){
+    var r = calcCheck(inp);
+    if(calcHasOp(inp.value) && typeof r==='number' && !isNaN(r)){ inp.value = String(r); calcCheck(inp); }
+  }
+  var calcBar = null, calcTarget = null;
+  function calcShowBar(inp){
+    if(!calcBar){
+      calcBar = document.createElement('div');
+      calcBar.className = 'calc-bar';
+      calcBar.innerHTML = ['+', '−', '×', '÷'].map(function(o){ return '<button type="button" tabindex="-1" data-op="'+o+'">'+o+'</button>'; }).join('')+
+        '<span class="calc-res"></span>';
+      // нажатие на кнопку не должно убирать клавиатуру
+      calcBar.addEventListener('pointerdown', function(ev){ ev.preventDefault(); });
+      calcBar.addEventListener('mousedown', function(ev){ ev.preventDefault(); });
+      calcBar.addEventListener('click', function(ev){
+        var b = ev.target.closest('[data-op]');
+        if(!b || !calcTarget) return;
+        var inp = calcTarget, op = {'−':'-', '×':'*', '÷':'/'}[b.dataset.op] || b.dataset.op;
+        var st = inp.selectionStart!=null ? inp.selectionStart : inp.value.length, en = inp.selectionEnd!=null ? inp.selectionEnd : st;
+        inp.value = inp.value.slice(0, st) + op + inp.value.slice(en);
+        try{ inp.setSelectionRange(st+1, st+1); }catch(e){}
+        inp.focus();
+        calcUpdateBar();
+      });
+    }
+    calcTarget = inp;
+    inp.insertAdjacentElement('afterend', calcBar);
+    calcBar.classList.add('show');
+    calcUpdateBar();
+  }
+  function calcUpdateBar(){
+    if(!calcBar || !calcTarget) return;
+    var v = calcTarget.value, r = calcCheck(calcTarget);
+    var res = calcBar.querySelector('.calc-res');
+    if(calcHasOp(v)) res.textContent = (typeof r==='number' && !isNaN(r)) ? '= '+fmtMoney2(r) : '= ?';
+    else res.textContent = T('можно считать: 120+45');
+    res.classList.toggle('hint', !calcHasOp(v));
+  }
+  function initCalcInputs(){
+    document.addEventListener('focusin', function(ev){
+      var t = ev.target;
+      if(t && t.classList && t.classList.contains('calc-input')) calcShowBar(t);
+    });
+    document.addEventListener('input', function(ev){
+      if(ev.target===calcTarget) calcUpdateBar();
+      else if(ev.target && ev.target.classList && ev.target.classList.contains('calc-input')) calcCheck(ev.target);
+    });
+    document.addEventListener('focusout', function(ev){
+      var t = ev.target;
+      if(!t || !t.classList || !t.classList.contains('calc-input')) return;
+      calcFinalize(t);
+      setTimeout(function(){
+        if(document.activeElement!==t && calcBar && calcTarget===t){
+          calcBar.classList.remove('show');
+          if(calcBar.parentNode) calcBar.parentNode.removeChild(calcBar);
+          calcTarget = null;
+        }
+      }, 60);
+    });
+    // перед отправкой формы выражения превращаются в числа (раньше, чем их прочитает обработчик формы)
+    document.addEventListener('submit', function(ev){
+      var f = ev.target;
+      if(f && f.querySelectorAll) f.querySelectorAll('.calc-input').forEach(calcFinalize);
+    }, true);
+  }
+
   // ---------- storage (real browser localStorage — persists on any real host, incl. GitHub Pages) ----------
   function loadData(){
     var raw = null;
@@ -606,6 +891,10 @@ function lessoncalBoot(){
       }catch(e){ state.boards = []; }
     }
     state.boards.forEach(normalizeBoard);
+    if(migrateSubsBoards()){
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({boards: state.boards, activeBoardId: state.activeBoardId})); }catch(e){}
+      setTimeout(function(){ showToast('🔁 '+T('Подписки теперь живут в «Финансах»: Расходы → фильтр «Подписки»'), {duration: 6000}); }, 900);
+    }
     if(!state.boards || state.boards.length===0){
       var b = newBoard(T('Мой календарь'), 'lessons');
       state.boards = [b]; state.activeBoardId = b.id;
@@ -644,6 +933,7 @@ function lessoncalBoot(){
     saveData();
   }
   function saveData(){
+    migrateSubsBoards();
     saveVersion++;
     if(undoState && saveVersion>undoState.version){ undoState = null; dropToastAction(); }
     try{
@@ -699,7 +989,29 @@ function lessoncalBoot(){
       app: BACKUP_FILE_MARKER, version: 1, created: new Date().toISOString(),
       boards: state.boards.map(boardFilePayload)
     }, 'kalendar_backup_'+fmt(todayD())+'.json');
+    try{ localStorage.setItem(BACKUP_AT_KEY, String(Date.now())); localStorage.removeItem(BACKUP_SNOOZE_KEY); }catch(e){}
     showToast(T('Копия всех досок сохранена'));
+  }
+  // ---------- напоминание о резервной копии: раз в 2 недели, если есть что терять ----------
+  var BACKUP_AT_KEY = 'lessoncal_backup_at', BACKUP_SNOOZE_KEY = 'lessoncal_backup_snooze';
+  var BACKUP_EVERY = 14*24*3600*1000;
+  function checkBackupReminder(){
+    try{
+      var now = Date.now();
+      var at = parseInt(localStorage.getItem(BACKUP_AT_KEY), 10);
+      // первый запуск с этой функцией: отсчёт начинается сейчас
+      if(!at){ localStorage.setItem(BACKUP_AT_KEY, String(now)); return; }
+      var snooze = parseInt(localStorage.getItem(BACKUP_SNOOZE_KEY), 10) || 0;
+      if(now - at < BACKUP_EVERY || now < snooze) return;
+      if(state.boards.every(boardIsEmpty)) return;
+      setTimeout(function(){
+        if(state.modal || quick.open) return; // не мешаем — напомним при следующем запуске
+        var days = Math.floor((now - at) / (24*3600*1000));
+        localStorage.setItem(BACKUP_SNOOZE_KEY, String(now + 3*24*3600*1000));
+        showToast('💾 '+T('Копию данных не сохраняли')+' '+days+' '+plural(days, T('день'), T('дня'), T('дней'))+'. '+T('Сохраните файл — если браузер очистит память, всё можно будет вернуть.'),
+          {action: T('Скачать'), onAction: downloadBackup, duration: 12000});
+      }, 2500);
+    }catch(e){}
   }
   function boardFromFileJson(json){
     return boardFromObj(JSON.parse(json));
@@ -972,8 +1284,10 @@ function lessoncalBoot(){
         })
       };
     });
-    return '<div class="fin-box" data-fin="'+escapeHtml(JSON.stringify({boards: data, link: link, subjName: defaultName}))+'">'+
-      T('<div class="fin-title">Записать в расходы</div>')+
+    // блок свёрнут: в заголовке видно, куда запишется трата; нажатие раскрывает настройки
+    return '<div class="fin-box collapsible" data-fin="'+escapeHtml(JSON.stringify({boards: data, link: link, subjName: defaultName}))+'">'+
+      '<button type="button" class="fin-head" aria-expanded="false"><span class="fin-title">'+T('Записать в расходы')+'</span><span class="fin-sum"></span><span class="fin-chev" aria-hidden="true">›</span></button>'+
+      '<div class="fin-body"><div class="fin-body-in">'+
       T('<div class="field"><label>Доска</label><select name="finBoard">')+
         T('<option value="">Не записывать</option>')+
         fins.map(function(b){ return '<option value="'+b.id+'"'+(b.id===selBoard?' selected':'')+'>'+escapeHtml(b.name)+'</option>'; }).join('')+
@@ -981,7 +1295,7 @@ function lessoncalBoot(){
       T('<div class="field" data-fin-dep><label>Категория расхода</label><select name="finExpense"></select></div>')+
       T('<div class="field" data-fin-dep><label>Списать со счёта</label><select name="finBalance"></select></div>')+
       T('<div class="field-hint" data-fin-dep style="margin-top:-6px;">Расход запишется, только если указана сумма оплаты. Категории показаны в выбранной валюте.</div>')+
-    '</div>';
+    '</div></div></div>';
   }
 
   function renderRenewModal(){
@@ -1037,6 +1351,63 @@ function lessoncalBoot(){
   }
 
   // ---------- сводка «Сегодня» по всем доскам ----------
+  // ---------- «Сейчас идёт»: уроки и пары по расписанию, задачи со временем ----------
+  function hmToMin(v){ var p = String(v||'').split(':'); return (+p[0])*60 + (+p[1]||0); }
+  function nowItems(){
+    var ds = fmt(todayD()), hm = nowHM(), nowM = hmToMin(hm), out = [];
+    state.boards.forEach(function(b){
+      var push = function(name, color, st, en){
+        if(!st) return;
+        var sM = hmToMin(st), eM = en ? hmToMin(en) : sM + 60;
+        if(nowM >= sM && nowM < eM) out.push({kind: 'now', name: name, color: color, start: st, end: en, left: eM - nowM, board: b});
+        else if(sM > nowM && sM - nowM <= 60) out.push({kind: 'soon', name: name, color: color, start: st, end: en, inMin: sM - nowM, board: b});
+      };
+      if(b.type==='lessons'){
+        b.subjects.forEach(function(s){
+          var info = dayInfo(s, ds);
+          if(!info || info.kind==='cancelled' || info.kind==='moved-away') return;
+          push(s.name, s.color, s.timeStart, s.timeEnd);
+        });
+      } else if(isSchedType(b.type)){
+        scheduleRowsFor(b, ds).forEach(function(r){
+          if(b.type==='planner' && isDoneOn(r.t, ds)) return;
+          push(r.item.name, r.item.color, r.t.timeStart, r.t.timeEnd);
+        });
+      }
+    });
+    out.sort(function(a, c){ return (a.kind===c.kind) ? (a.start<c.start ? -1 : 1) : (a.kind==='now' ? -1 : 1); });
+    return out;
+  }
+  function isNowRange(st, en){
+    if(!st) return false;
+    var n = hmToMin(nowHM()), sM = hmToMin(st), eM = en ? hmToMin(en) : sM + 60;
+    return n >= sM && n < eM;
+  }
+  function minText(m){
+    if(m < 60) return m+' '+T('мин');
+    var h = Math.floor(m/60), r = m%60;
+    return h+' '+T('ч')+(r ? ' '+r+' '+T('мин') : '');
+  }
+  // небольшая плашка сверху: что идёт прямо сейчас (или начнётся в ближайший час)
+  function nowBannerHtml(){
+    var list = nowItems();
+    if(!list.length) return '';
+    var x = list[0];
+    var color = COLORS[x.color] || COLORS.amber;
+    var txt = x.kind==='now'
+      ? '<span class="nb-tag">'+T('Сейчас')+'</span><b>'+escapeHtml(x.name)+'</b><span class="nb-meta">'+timeRangeStr({timeStart: x.start, timeEnd: x.end})+' · '+T('ещё')+' '+minText(x.left)+'</span>'
+      : '<span class="nb-tag soon">'+T('Скоро')+'</span><b>'+escapeHtml(x.name)+'</b><span class="nb-meta">'+fmtTime(x.start)+' · '+T('через')+' '+minText(x.inMin)+'</span>';
+    var more = list.length > 1 ? '<span class="nb-more">+'+(list.length-1)+'</span>' : '';
+    return '<button type="button" class="now-banner'+(x.kind==='now'?' live':'')+'" data-act="open-summary" style="--mc:'+color+'"><span class="nb-dot"></span>'+txt+more+'</button>';
+  }
+  function updateNowBanner(){
+    var el = document.getElementById('now-banner');
+    if(!el) return;
+    var html = nowBannerHtml();
+    if(el.innerHTML===html) return;
+    el.innerHTML = html;
+    el.querySelectorAll('[data-act]').forEach(function(b){ b.addEventListener('click', function(ev){ handleAction(b, ev); }); });
+  }
   function sumRow(color, time, name, meta, extraCls){
     return '<div class="sum-row'+(extraCls?' '+extraCls:'')+'">'+
       '<span class="dot" style="background:'+color+'"></span>'+
@@ -1057,7 +1428,8 @@ function lessoncalBoot(){
       });
       lessons.sort(function(a,b2){ return (a.s.timeStart||'').localeCompare(b2.s.timeStart||''); });
       out += lessons.map(function(l){
-        return sumRow(COLORS[l.s.color]||COLORS.amber, timeRangeStr(l.s) || T('весь день'), escapeHtml(l.s.name), l.s.timeStart ? (l.past ? T('прошло') : T('впереди')) : '', (l.past && l.s.timeStart) ? 'is-past' : '');
+        var nowL = l.s.timeStart && isNowRange(l.s.timeStart, l.s.timeEnd);
+        return sumRow(COLORS[l.s.color]||COLORS.amber, timeRangeStr(l.s) || T('весь день'), escapeHtml(l.s.name), nowL ? T('сейчас') : (l.s.timeStart ? (l.past ? T('прошло') : T('впереди')) : ''), nowL ? 'is-now' : ((l.past && l.s.timeStart) ? 'is-past' : ''));
       }).join('');
       out += renewalAlerts(b).map(function(a){ return renderRenewalRow(a, b.id); }).join('');
     } else if(b.type==='events'){
@@ -1088,7 +1460,6 @@ function lessoncalBoot(){
         if(spent < exp.budget*0.8) return;
         out += sumRow(COLORS[exp.color]||COLORS.amber, T('бюджет'), escapeHtml(exp.name), spent>exp.budget ? T('превышен') : Math.round(spent/exp.budget*100)+'%', 'is-warn');
       });
-    } else if(b.type==='subs'){
       b.subs.forEach(function(x){ subPending(x).forEach(function(o){ out += subPromptRow(x, o, b.id); }); });
       subSoonRows(b).forEach(function(r){
         out += sumRow(COLORS[r.sub.color]||COLORS.amber, fmtHumanNoYear(r.date), escapeHtml(r.sub.name)+' · '+fmtMoney(r.sub.amount, r.sub.currency), inDaysText(daysUntil(r.date)));
@@ -1108,16 +1479,28 @@ function lessoncalBoot(){
         var color = COLORS[r.it.color]||COLORS.amber;
         if(b.type==='planner'){
           var dn = isDoneOn(r.t, ds);
-          return '<label class="sum-row sum-task'+(dn?' is-past':'')+'">'+
+          return '<label class="sum-row sum-task'+(dn?' is-past':'')+(!dn && isNowRange(r.t.timeStart, r.t.timeEnd)?' is-now':'')+'">'+
             '<input type="checkbox" class="task-check" data-act="toggle-done" data-item="'+r.it.id+'" data-time="'+r.t.id+'" data-date="'+ds+'" data-board="'+b.id+'"'+(dn?' checked':'')+'>'+
             '<span class="sum-time mono">'+(timeRangeStr(r.t)||'')+'</span>'+
             '<span class="sum-name'+(dn?' task-done':'')+'">'+escapeHtml(r.it.name)+'</span>'+
           '</label>';
         }
-        return sumRow(color, timeRangeStr(r.t) || '', escapeHtml(r.it.name), '');
+        var nowS = isNowRange(r.t.timeStart, r.t.timeEnd);
+        return sumRow(color, timeRangeStr(r.t) || '', escapeHtml(r.it.name), nowS ? T('сейчас') : '', nowS ? 'is-now' : '');
       }).join('');
     }
     return out;
+  }
+  function summaryNowBlock(){
+    var list = nowItems();
+    if(!list.length) return '';
+    return '<div class="sum-now">'+list.slice(0, 4).map(function(x){
+      var color = COLORS[x.color] || COLORS.amber;
+      return '<div class="sum-now-row'+(x.kind==='now'?' live':'')+'"><span class="dot" style="background:'+color+'"></span>'+
+        '<span class="sn-tag">'+(x.kind==='now' ? T('Сейчас') : T('Скоро'))+'</span>'+
+        '<span class="sn-name">'+escapeHtml(x.name)+'<small>'+escapeHtml(x.board.name)+'</small></span>'+
+        '<span class="sn-meta">'+(x.kind==='now' ? T('ещё')+' '+minText(x.left) : T('через')+' '+minText(x.inMin))+'</span></div>';
+    }).join('')+'</div>';
   }
   function renderSummaryModal(){
     var t = todayD(), ds = fmt(t);
@@ -1138,6 +1521,7 @@ function lessoncalBoot(){
         '<div class="sum-date">'+dow.charAt(0).toUpperCase()+dow.slice(1)+'</div>'+
         '<h3 class="display sum-title">'+fmtHuman(ds)+'</h3>'+
         T('<div class="sub">Всё важное на сегодня со всех досок</div>')+
+        summaryNowBlock()+
         (sections || T('<div class="empty" style="padding:26px 6px;"><div class="display">Свободный день</div>На сегодня ничего не запланировано.</div>'))+
       '</div>'+
     '</div>';
@@ -1217,17 +1601,75 @@ function lessoncalBoot(){
     return keys.map(function(c){ return fmtMoney2(map[c], c); }).join(' + ');
   }
 
+  // у каждой подписки на доске финансов есть своя категория расходов — туда пишутся оплаты
+  function subCategory(b, sub){
+    var l = sub.financeLink;
+    if(!l || l.boardId!==b.id) return null;
+    return b.expenses.find(function(e){ return e.id===l.expenseId; }) || null;
+  }
+  function subOfExpense(b, exp){
+    return (b.subs||[]).find(function(x){ return x.financeLink && x.financeLink.boardId===b.id && x.financeLink.expenseId===exp.id; }) || null;
+  }
+  function ensureSubCategory(b, sub){
+    if(subCategory(b, sub)) return;
+    var nm = String(sub.name||'').trim().toLowerCase();
+    var cat = b.expenses.find(function(e){ return e.currency===sub.currency && e.name.trim().toLowerCase()===nm && !subOfExpense(b, e); });
+    if(!cat){
+      cat = {id: uid(), name: sub.name, color: sub.color, amount: 0, currency: sub.currency, budget: 0, subs: [], history: [], aliases: [], recurring: null};
+      b.expenses.push(cat);
+    }
+    var oldBal = (sub.financeLink && sub.financeLink.balanceId) || '';
+    if(oldBal && !b.balances.some(function(x){ return x.id===oldBal; })) oldBal = '';
+    sub.financeLink = {boardId: b.id, expenseId: cat.id, balanceId: oldBal};
+  }
+  // старые доски «Подписки» переезжают в «Финансы»
+  function migrateSubsBoards(){
+    var olds = state.boards.filter(function(b){ return b.type==='subs'; });
+    if(!olds.length) return false;
+    olds.forEach(function(sb){
+      var fins = state.boards.filter(function(b){ return b.type==='finance'; });
+      var target = null;
+      if(!fins.length){ sb.type = 'finance'; normalizeBoard(sb); target = sb; }
+      (target===sb ? sb.subs.slice() : sb.subs).forEach(function(x){
+        var dest = target;
+        if(!dest){
+          var l = x.financeLink;
+          dest = (l && fins.find(function(b){ return b.id===l.boardId; })) || fins[0];
+        }
+        if(dest!==sb) dest.subs.push(x);
+        ensureSubCategory(dest, x);
+      });
+      if(target!==sb){
+        var destId = (fins[0] || {}).id;
+        state.boards = state.boards.filter(function(b){ return b!==sb; });
+        if(state.activeBoardId===sb.id && destId){ state.activeBoardId = destId; state.financeView = 'expenses'; state.expFilter = 'subs'; }
+      }
+    });
+    state.subsMigrated = true;
+    return true;
+  }
   function addSub(data){
     var b = activeBoard();
-    b.subs.push({id: uid(), name: data.name, color: data.color, amount: data.amount, currency: data.currency, period: data.period,
-      startDate: data.startDate, active: true, paid: {}, skipped: [], history: [], createdAt: fmt(todayD()), financeLink: null});
+    var x = {id: uid(), name: data.name, color: data.color, amount: data.amount, currency: data.currency, period: data.period,
+      startDate: data.startDate, active: true, paid: {}, skipped: [], history: [], createdAt: fmt(todayD()), financeLink: null};
+    b.subs.push(x);
+    ensureSubCategory(b, x);
     saveData();
   }
   function updateSub(id, data){
-    var x = activeBoard().subs.find(function(v){ return v.id===id; });
+    var b = activeBoard();
+    var x = b.subs.find(function(v){ return v.id===id; });
     if(!x) return;
-    x.name = data.name; x.color = data.color; x.amount = data.amount; x.currency = data.currency;
+    var cat = subCategory(b, x);
+    x.name = data.name; x.color = data.color; x.amount = data.amount;
     x.period = data.period; x.startDate = data.startDate;
+    if(cat){
+      cat.name = data.name; cat.color = data.color;
+      // валюту категории меняем, только пока в ней нет трат
+      if(data.currency!==x.currency && !(cat.history||[]).length) cat.currency = data.currency;
+    }
+    x.currency = data.currency;
+    if(cat && cat.currency!==x.currency){ x.financeLink = null; ensureSubCategory(b, x); }
     saveData();
   }
   function findSub(id){ return activeBoard().subs.find(function(v){ return v.id===id; }); }
@@ -1311,54 +1753,46 @@ function lessoncalBoot(){
     return '<div class="notice'+(rows.length?'':' warn')+'"><div class="notice-title">'+(rows.length ? T('Подтвердите списание') : T('Скоро списание'))+'</div>'+rows.join('')+soon.join('')+'</div>';
   }
 
-  function renderSubsSidebar(ab){
-    var html = '<div class="sidebar">'+renderSubsNotice(ab)+'<h2>'+T('Подписки')+'</h2>'+renderSearchBox()+'<div class="cards">';
-    if(!ab.subs.length){
-      html += '<div class="empty" style="padding:20px 6px;"><div class="display">'+T('Пока пусто')+'</div>'+T('Добавьте Netflix, Spotify, iCloud — приложение напомнит о списании и запишет его в расходы.')+'</div>';
-    }
-    var sorted = ab.subs.slice().sort(function(a,c){
+  function subStatusLine(x){
+    if(!x.active) return '<span class="dim">'+T('На паузе — списания не отслеживаются')+'</span>';
+    if(subPending(x).length) return '<span class="warn">'+T('Ждёт подтверждения оплаты')+'</span>';
+    var nx = subNext(x);
+    return nx ? T('Следующее списание')+': <b>'+fmtHumanNoYear(nx)+'</b> · '+inDaysText(daysUntil(nx)) : '';
+  }
+  function subCardHtml(x){
+    var color = COLORS[x.color] || COLORS.amber;
+    var line = subStatusLine(x);
+    var spent = subSpent(x);
+    return ''+
+      '<div class="punch-card'+(x.active?'':' is-paused')+'">'+
+        '<div class="notch left"></div><div class="notch right"></div><div class="perf"></div>'+
+        '<div class="pc-head">'+
+          '<div class="pc-name"><span class="dot" style="background:'+color+'"></span><span class="txt" title="'+escapeHtml(x.name)+'">'+escapeHtml(x.name)+'</span></div>'+
+          '<div style="display:flex;gap:4px;">'+
+            '<button class="icon-btn" data-act="sub-toggle" data-id="'+x.id+'" title="'+(x.active?T('Поставить на паузу'):T('Возобновить'))+'" style="width:26px;height:26px;font-size:11px;">'+(x.active?'❚❚':'▶')+'</button>'+
+            '<button class="icon-btn" data-act="edit-sub" data-id="'+x.id+'" title="'+T('Изменить')+'" style="width:26px;height:26px;font-size:12px;">✎</button>'+
+            '<button class="icon-btn" data-act="delete-sub" data-id="'+x.id+'" title="'+T('Удалить')+'" style="width:26px;height:26px;font-size:13px;">✕</button>'+
+          '</div>'+
+        '</div>'+
+        '<div class="pc-body">'+
+          '<div class="pc-stats"><b>'+fmtMoney(x.amount, x.currency)+'</b> '+subPeriodLabel(x.period)+
+            (x.period!=='month' ? ' <span class="dim">≈ '+fmtMoney2(subMonthly(x), x.currency)+' '+T('в месяц')+'</span>' : '')+
+            (line ? '<br>'+line : '')+'</div>'+
+          (spent>0 ? '<div class="pc-paid">'+T('Оплачено всего')+': <b>'+fmtMoney2(spent, x.currency)+'</b></div>' : '')+
+        '</div>'+
+      '</div>';
+  }
+  function sortedSubs(ab){
+    return ab.subs.slice().sort(function(a,c){
       if(a.active!==c.active) return a.active ? -1 : 1;
       var na = subNext(a) || '9999', nc = subNext(c) || '9999';
       if(subPending(a).length) na = '0000';
       if(subPending(c).length) nc = '0000';
       return na<nc ? -1 : (na>nc ? 1 : 0);
     });
-    sorted.forEach(function(x){
-      var color = COLORS[x.color] || COLORS.amber;
-      var line;
-      if(!x.active) line = '<span class="dim">'+T('На паузе — списания не отслеживаются')+'</span>';
-      else if(subPending(x).length) line = '<span class="warn">'+T('Ждёт подтверждения оплаты')+'</span>';
-      else {
-        var nx = subNext(x);
-        line = nx ? T('Следующее списание')+': <b>'+fmtHumanNoYear(nx)+'</b> · '+inDaysText(daysUntil(nx)) : '';
-      }
-      var spent = subSpent(x);
-      html += ''+
-        '<div class="punch-card'+(x.active?'':' is-paused')+'">'+
-          '<div class="notch left"></div><div class="notch right"></div><div class="perf"></div>'+
-          '<div class="pc-head">'+
-            '<div class="pc-name"><span class="dot" style="background:'+color+'"></span><span class="txt" title="'+escapeHtml(x.name)+'">'+escapeHtml(x.name)+'</span></div>'+
-            '<div style="display:flex;gap:4px;">'+
-              '<button class="icon-btn" data-act="sub-toggle" data-id="'+x.id+'" title="'+(x.active?T('Поставить на паузу'):T('Возобновить'))+'" style="width:26px;height:26px;font-size:11px;">'+(x.active?'❚❚':'▶')+'</button>'+
-              '<button class="icon-btn" data-act="edit-sub" data-id="'+x.id+'" title="'+T('Изменить')+'" style="width:26px;height:26px;font-size:12px;">✎</button>'+
-              '<button class="icon-btn" data-act="delete-sub" data-id="'+x.id+'" title="'+T('Удалить')+'" style="width:26px;height:26px;font-size:13px;">✕</button>'+
-            '</div>'+
-          '</div>'+
-          '<div class="pc-body">'+
-            '<div class="pc-stats"><b>'+fmtMoney(x.amount, x.currency)+'</b> '+subPeriodLabel(x.period)+
-              (x.period!=='month' ? ' <span class="dim">≈ '+fmtMoney2(subMonthly(x), x.currency)+' '+T('в месяц')+'</span>' : '')+
-              (line ? '<br>'+line : '')+'</div>'+
-            (spent>0 ? '<div class="pc-paid">'+T('Оплачено всего')+': <b>'+fmtMoney2(spent, x.currency)+'</b></div>' : '')+
-          '</div>'+
-        '</div>';
-    });
-    html += '</div>';
-    html += '<button class="add-card" data-act="open-add">+ '+T('Добавить подписку')+'</button>';
-    html += '</div>';
-    return html;
   }
-
-  function renderSubsPanel(ab){
+  // сводка над списком подписок: сколько уходит в месяц и в год
+  function renderSubsStats(ab){
     var month = {}, year = {}, active = 0;
     ab.subs.forEach(function(x){
       if(!x.active) return;
@@ -1366,38 +1800,22 @@ function lessoncalBoot(){
       month[x.currency] = (month[x.currency]||0) + subMonthly(x);
       year[x.currency] = (year[x.currency]||0) + subMonthly(x)*12;
     });
-    var t = todayD(), up = [];
-    ab.subs.forEach(function(x){
-      if(!x.active) return;
-      subOccs(x, t, addDays(t, 45)).forEach(function(o){ if(o.status==='pending') up.push({sub: x, date: o.date}); });
-    });
-    up.sort(function(a,c){ return a.date<c.date ? -1 : (a.date>c.date ? 1 : 0); });
-    up = up.slice(0, 6);
-    var list = up.length ? up.map(function(r){
-      var color = COLORS[r.sub.color] || COLORS.amber;
-      return '<div class="up-row"><span class="dot" style="background:'+color+'"></span>'+
-        '<span class="up-date">'+fmtHumanNoYear(r.date)+'</span>'+
-        '<span class="up-name">'+escapeHtml(r.sub.name)+'</span>'+
-        '<span class="up-sum">'+fmtMoney(r.sub.amount, r.sub.currency)+'</span>'+
-        '<span class="up-in">'+inDaysText(daysUntil(r.date))+'</span></div>';
-    }).join('') : '<div class="empty" style="padding:14px 6px;">'+T('В ближайшие недели списаний нет.')+'</div>';
-    return '<div class="finance-wheel-wrap stats">'+
-      '<div class="stats-head"><div class="stats-title">'+T('Расходы на подписки')+'</div><div class="stats-legend"><span>'+T('Активных')+': '+active+'</span></div></div>'+
-      '<div class="stats-summary two">'+
+    return '<div class="subs-stats">'+
+      '<div class="subs-stats-head">'+T('Расходы на подписки')+'<span>'+T('Активных')+': '+active+'</span></div>'+
+      '<div class="subs-stats-row">'+
         '<div><span>'+T('В месяц')+'</span><b>'+totalsText(month)+'</b></div>'+
         '<div><span>'+T('В год')+'</span><b>'+totalsText(year)+'</b></div>'+
       '</div>'+
-      '<div class="section-title" style="margin-top:4px;">'+T('Ближайшие списания')+'</div>'+
-      list+
     '</div>';
   }
 
-  function subMarkersFor(ab, ds, todayStr){
+  function subMarkersFor(ab, ds, todayStr, skipPaid){
     var out = '';
     var d = parseD(ds);
     ab.subs.forEach(function(x){
       subOccs(x, d, d).forEach(function(o){
         if(!x.active && o.status!=='paid') return;
+        if(skipPaid && o.status==='paid') return; // оплата уже видна как обычная трата
         var cls = 'marker';
         if(o.status==='skipped') cls += ' cancelled';
         else if(o.status==='pending'){ cls += ' outline'; if(ds<=todayStr && ds>=x.createdAt) cls += ' due'; }
@@ -1407,12 +1825,13 @@ function lessoncalBoot(){
     return out;
   }
 
-  function renderSubsDayModal(){
-    var ds = state.selectedDate, ab = activeBoard(), d = parseD(ds), todayStr = fmt(todayD());
+  function subDayItems(ab, ds, skipPaid){
+    var d = parseD(ds), todayStr = fmt(todayD());
     var items = '';
     ab.subs.forEach(function(x){
       subOccs(x, d, d).forEach(function(o){
         if(!x.active && o.status!=='paid') return;
+        if(skipPaid && o.status==='paid') return;
         var color = COLORS[x.color] || COLORS.amber;
         var head = '<div class="day-item-head"><span class="dot" style="background:'+color+'"></span><span class="nm">'+escapeHtml(x.name)+'</span><span class="mono" style="font-size:12px;color:var(--ink-dim);">'+fmtMoney(x.amount, x.currency)+'</span></div>';
         var st = '', acts = '';
@@ -1431,6 +1850,11 @@ function lessoncalBoot(){
         items += '<div class="day-item">'+head+st+(acts ? '<div class="row-actions">'+acts+'</div>' : '')+'</div>';
       });
     });
+    return items;
+  }
+  function renderSubsDayModal(){
+    var ds = state.selectedDate, ab = activeBoard();
+    var items = subDayItems(ab, ds, false);
     if(!items) items = '<div class="empty" style="padding:20px 6px;">'+T('В этот день списаний нет.')+'</div>';
     return '<div class="overlay"><div class="modal" data-stop="1">'+
       '<button class="close-x" data-act="close-modal">✕</button>'+
@@ -1453,7 +1877,8 @@ function lessoncalBoot(){
     }
     return '<div class="overlay"><div class="modal" data-stop="1">'+
       '<button class="close-x" data-act="close-modal">✕</button>'+
-      '<h3 class="display">'+(editing ? T('Изменить подписку') : T('Новая подписка'))+'</h3>'+
+      '<h3 class="display">'+(editing ? T('Изменить подписку') : T('Новый расход'))+'</h3>'+
+      (editing ? '' : addKindToggle('sub'))+
       '<div class="sub">'+T('Укажите сумму и дату списания — приложение посчитает расходы и напомнит заранее')+'</div>'+
       '<form id="add-sub-form">'+
         (editing ? '<input type="hidden" name="editId" value="'+editing.id+'">' : '')+
@@ -1761,12 +2186,13 @@ function lessoncalBoot(){
   var quick = {fab: null, sheet: null, log: null, input: null, suggest: null, open: false, greeted: false, pendingMsg: null};
 
   var Q_WORDS = {
-    today: ['сегодня','сьогодні','today'],
-    yesterday: ['вчера','вчора','yesterday'],
-    before: ['позавчера','позавчора'],
-    income: ['доход','дохід','income','получил','получила','отримав','отримала','зарплата+']
+    today: ['сегодня','сьогодні','today','heute','hoy','aujourdhui','oggi','dzisiaj','dziś','dzis','hoje'],
+    yesterday: ['вчера','вчора','yesterday','gestern','ayer','hier','ieri','wczoraj','ontem'],
+    before: ['позавчера','позавчора','vorgestern','anteayer','avant-hier','przedwczoraj','anteontem'],
+    income: ['доход','дохід','income','получил','получила','отримав','отримала','зарплата+','einnahme','einkommen','ingreso','revenu','entrata','przychód','przychod','receita','renda']
   };
-  var Q_CUR = {'₴':'UAH','грн':'UAH','гривен':'UAH','гривень':'UAH','uah':'UAH','$':'USD','usd':'USD','долл':'USD','доларів':'USD','долларов':'USD','€':'EUR','eur':'EUR','евро':'EUR','євро':'EUR','zł':'PLN','pln':'PLN','злотых':'PLN','злотих':'PLN'};
+  var Q_CUR = {'₴':'UAH','грн':'UAH','гривен':'UAH','гривень':'UAH','uah':'UAH','$':'USD','usd':'USD','долл':'USD','доларів':'USD','долларов':'USD','€':'EUR','eur':'EUR','евро':'EUR','євро':'EUR','zł':'PLN','pln':'PLN','злотых':'PLN','злотих':'PLN',
+    '£':'GBP','₽':'RUB','₺':'TRY','₸':'KZT','₾':'GEL','₹':'INR','kč':'CZK','ft':'HUF','r$':'BRL','fr':'CHF','franken':'CHF','euro':'EUR','euros':'EUR','dollar':'USD','dollars':'USD','dólares':'USD','reais':'BRL','złotych':'PLN','zl':'PLN'};
   function qCurrency(tok){
     if(Q_CUR[tok] && CURRENCY_KEYS.indexOf(Q_CUR[tok])!==-1) return Q_CUR[tok];
     var up = tok.toUpperCase();
@@ -1804,10 +2230,21 @@ function lessoncalBoot(){
   function qParse(text){
     var raw = String(text||'').trim();
     var res = {raw: raw, amount: null, sign: 0, currency: null, date: null, dateWord: '', words: [], rawWords: [], noBalance: false};
-    var toks = raw.replace(Q_NOBAL_PHRASE, ' нмб ').replace(/([0-9])(₴|\$|€|грн|uah|usd|eur|pln|zł)/gi, '$1 $2').replace(/(₴|\$|€)([0-9])/g, '$1 $2').split(/\s+/).filter(Boolean);
+    // «85 + 40» → «85+40», чтобы пример посчитался как одна сумма
+    var toks = raw.replace(/(\d)\s*([+*×÷])\s*(?=\d)/g, '$1$2').replace(Q_NOBAL_PHRASE, ' нмб ').replace(/([0-9])(₴|\$|€|£|₺|₸|₾|₹|₽|грн|uah|usd|eur|pln|zł|kč)/gi, '$1 $2').replace(/(r\$|₴|\$|€|£|₺|₸|₾|₹|₽)([0-9])/gi, '$1 $2').split(/\s+/).filter(Boolean);
     var t = todayD();
     toks.forEach(function(orig){
       var tok = orig.toLowerCase();
+      // калькулятор: «кофе 85+40», «такси 3*120»
+      var cm = tok.match(/^([+]?)(\d+(?:[.,]\d+)?(?:[+\-−*×x÷]\d+(?:[.,]\d+)?)+)$/);
+      if(cm && res.amount===null){
+        var cv = calcEval(cm[2]);
+        if(typeof cv==='number' && !isNaN(cv) && cv>0){
+          res.amount = cv; res.calc = cm[2];
+          if(cm[1]==='+') res.sign = 1;
+          return;
+        }
+      }
       var m = tok.match(/^([+\-−]?)(\d+(?:[.,]\d{1,2})?)$/);
       if(m && res.amount===null){
         res.amount = parseFloat(m[2].replace(',', '.'));
@@ -1880,8 +2317,8 @@ function lessoncalBoot(){
     return null;
   }
   var Q_ACC_GROUPS = {
-    cash: ['наличные','наличными','наличка','наличкой','нал','кеш','кэш','кешем','готівка','готівкою','готівки','cash'],
-    card: ['карта','картой','карты','карточка','карточкой','картка','карткою','картки','card','visa','mastercard']
+    cash: ['наличные','наличными','наличка','наличкой','нал','кеш','кэш','кешем','готівка','готівкою','готівки','cash','bargeld','efectivo','espèces','especes','contanti','gotówka','gotowka','gotówką','dinheiro'],
+    card: ['карта','картой','карты','карточка','карточкой','картка','карткою','картки','card','visa','mastercard','karte','tarjeta','carte','carta','karta','kartą','cartão','cartao']
   };
   function qAccGroup(w){
     var n = qNorm(w);
@@ -1956,13 +2393,16 @@ function lessoncalBoot(){
     var sign = kind==='income' ? '+' : '−';
     var where = escapeHtml(it.name) + (target.sub ? ' › '+escapeHtml(target.sub.name) : '');
     var lines = [
-      '<b>'+where+'</b> · <span class="'+(kind==='income'?'q-pos':'q-neg')+'">'+sign+fmtMoney2(p.amount, it.currency)+'</span>',
+      '<b>'+where+'</b> · <span class="'+(kind==='income'?'q-pos':'q-neg')+'">'+sign+fmtMoney2(p.amount, it.currency)+'</span>'+(p.calc ? ' <span class="dim">('+escapeHtml(p.calc.replace(/\*/g,'×'))+')</span>' : ''),
       T('Доска')+' «'+escapeHtml(b.name)+'» · '+(kind==='income' ? T('доходы') : T('расходы'))+(p.dateWord ? ' · '+escapeHtml(p.dateWord) : '')
     ];
     var bal = found && acc ? b.balances.find(function(x){ return x.id===acc.id; }) : null;
-    if(p.accountSecondary && !p.noBalance) lines.push('⚠️ «'+escapeHtml(p.accountSecondary)+'» — '+T('второстепенный счёт. Траты из быстрого ввода списываются только с основных')+(bal ? '' : '.'));
-    if(p.accountMiss && !p.noBalance) lines.push('⚠️ '+T('Счёт')+' «'+escapeHtml(p.accountMiss)+'» '+T('не найден — использован основной'));
-    if(bal){
+    var noBals = !b.balances.length; // баланс не ведётся — про счета вообще не пишем
+    if(noBals){}
+    else if(p.accountSecondary && !p.noBalance) lines.push('⚠️ «'+escapeHtml(p.accountSecondary)+'» — '+T('второстепенный счёт. Траты из быстрого ввода списываются только с основных')+(bal ? '' : '.'));
+    if(!noBals && p.accountMiss && !p.noBalance) lines.push('⚠️ '+T('Счёт')+' «'+escapeHtml(p.accountMiss)+'» '+T('не найден — использован основной'));
+    if(noBals){}
+    else if(bal){
       var hh = (it.history||[]).find(function(x){ return x.id===ref.histId; });
       var conv = (bal.currency!==it.currency && hh && typeof hh.balAmount==='number') ? ' ('+fmtMoney2(hh.balAmount, bal.currency)+' '+T('по курсу')+')' : '';
       lines.push((kind==='income' ? T('Зачислено на') : T('Списано с'))+' «'+escapeHtml(bal.label || T('счёт'))+'»'+conv+' · '+T('осталось')+' '+fmtMoney2(bal.amount, bal.currency));
@@ -1983,12 +2423,178 @@ function lessoncalBoot(){
       }}]};
   }
 
+
+  // ---------- ЧАСТЫЕ ТРАТЫ: кнопки в быстром вводе ----------
+  // Одно нажатие — трата записана в заранее выбранную категорию и счёт.
+  var PRESETS_KEY = 'lessoncal_quick_presets';
+  function loadPresets(){
+    try{
+      var a = JSON.parse(localStorage.getItem(PRESETS_KEY) || '[]');
+      return Array.isArray(a) ? a.filter(function(x){ return x && x.id && x.amount>0; }) : [];
+    }catch(e){ return []; }
+  }
+  function savePresets(list){ try{ localStorage.setItem(PRESETS_KEY, JSON.stringify(list)); }catch(e){} }
+  // куда пишет кнопка: доска, категория, подкатегория (если ещё существуют)
+  function presetTarget(pr){
+    var b = state.boards.find(function(x){ return x.id===pr.boardId && x.type==='finance'; });
+    var it = b ? b.expenses.find(function(x){ return x.id===pr.expenseId; }) : null;
+    var sub = (it && pr.subId) ? (it.subs||[]).find(function(x){ return x.id===pr.subId; }) || null : null;
+    return it ? {board: b, item: it, sub: sub} : null;
+  }
+  function presetChipText(pr){
+    var tg = presetTarget(pr);
+    return pr.label + ' · ' + fmtMoney2(pr.amount, tg ? tg.item.currency : '');
+  }
+  function qRenderPresets(){
+    if(!quick.sheet) return;
+    var box = quick.sheet.querySelector('.qs-presets');
+    if(!box) return;
+    var list = loadPresets();
+    box.innerHTML = '<button type="button" class="q-chip qp-help" data-qp-help="1" aria-label="'+escapeHtml(T('Справка'))+'">?</button>'+
+      '<button type="button" class="q-chip qp-set" data-qp-set="1" aria-label="'+escapeHtml(T('Настроить частые траты'))+'">'+
+        (list.length ? '⚙︎' : '⚡ '+escapeHtml(T('Частые траты одной кнопкой — настроить')))+'</button>'+
+      list.map(function(pr){
+        var tg = presetTarget(pr);
+        return '<button type="button" class="q-chip qp'+(tg ? '' : ' broken')+'" data-qp="'+pr.id+'">'+escapeHtml(presetChipText(pr))+'</button>';
+      }).join('');
+  }
+  function qRunPreset(id){
+    var pr = loadPresets().find(function(x){ return x.id===id; });
+    if(!pr) return;
+    qMsg('me', '⚡ ' + presetChipText(pr));
+    var tg = presetTarget(pr);
+    if(!tg){
+      qBot(T('Категория для этой кнопки удалена. Настройте кнопку заново.'), [{label: T('Настроить'), primary: true, fn: openPresets}]);
+      return;
+    }
+    var p = {raw: '', amount: pr.amount, sign: 0, currency: tg.item.currency, date: fmt(todayD()), dateWord: '', words: [], rawWords: [], noBalance: pr.balanceId==='none'};
+    var acc = (pr.balanceId && pr.balanceId!=='none') ? tg.board.balances.find(function(x){ return x.id===pr.balanceId; }) || null : null;
+    var res = qRecord(tg, p, 'expense', {account: acc});
+    qBot(res.html, res.actions);
+  }
+  function openPresets(){
+    var fromQuick = !!quick.open;
+    if(fromQuick) closeQuick();
+    state.presetsFromQuick = fromQuick;
+    state.modal = 'presets'; state.menuOpen = false; state.editing = null;
+    render();
+  }
+  function renderPresetsModal(){
+    var list = loadPresets();
+    var fins = state.boards.filter(function(b){ return b.type==='finance'; });
+    var editing = (state.editing && state.editing.kind==='preset') ? list.find(function(x){ return x.id===state.editing.id; }) : null;
+    var rows = list.map(function(pr){
+      var tg = presetTarget(pr);
+      var where = tg ? escapeHtml(tg.item.name) + (tg.sub ? ' › '+escapeHtml(tg.sub.name) : '') + ' · ' + escapeHtml(tg.board.name)
+        : '<span class="q-neg">'+T('категория удалена')+'</span>';
+      var acc = (tg && !tg.board.balances.length) ? '' : pr.balanceId==='none' ? T('без списания') : (tg && pr.balanceId ? ((tg.board.balances.find(function(x){ return x.id===pr.balanceId; })||{}).label || T('основной счёт')) : T('основной счёт'));
+      return '<div class="day-item preset-row">'+
+        '<div class="day-item-head"><span class="nm">⚡ '+escapeHtml(pr.label)+'</span><span class="mono">'+fmtMoney2(pr.amount, tg ? tg.item.currency : '')+'</span></div>'+
+        '<div class="dim preset-where">'+where+(acc ? ' · '+escapeHtml(acc) : '')+'</div>'+
+        '<div class="row-actions">'+
+          '<button class="btn small" data-act="preset-up" data-id="'+pr.id+'" aria-label="'+escapeHtml(T('Выше'))+'">↑</button>'+
+          '<button class="btn small" data-act="preset-edit" data-id="'+pr.id+'">'+T('Изменить')+'</button>'+
+          '<button class="btn small danger" data-act="preset-delete" data-id="'+pr.id+'">'+T('Удалить')+'</button>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+    var formHtml;
+    if(!fins.length){
+      formHtml = '<div class="empty" style="padding:16px 6px;">'+T('Сначала создайте доску «Финансы» и категории расходов — тогда кнопки будут знать, куда записывать траты.')+'</div>';
+    } else {
+      var data = fins.map(function(b){
+        return {id: b.id,
+          cats: b.expenses.map(function(e){ return {id: e.id, name: e.name, cur: e.currency, sym: CURRENCIES[e.currency]||e.currency, subs: (e.subs||[]).map(function(x){ return {id: x.id, name: x.name}; })}; }),
+          bals: b.balances.map(function(x){ return {id: x.id, label: balLabel(x), cur: x.currency, main: x.kind==='main'}; })};
+      });
+      var selB = editing && fins.some(function(b){ return b.id===editing.boardId; }) ? editing.boardId : fins[0].id;
+      formHtml = '<form id="preset-form" data-pf="'+escapeHtml(JSON.stringify({boards: data, cur: editing ? {b: editing.boardId, e: editing.expenseId, s: editing.subId||'', a: editing.balanceId||''} : null}))+'">'+
+        (editing ? '<input type="hidden" name="editId" value="'+editing.id+'">' : '')+
+        '<div class="field-row">'+
+          '<div class="field" style="flex:3;"><label>'+T('Название кнопки')+'</label><input type="text" name="label" maxlength="24" placeholder="'+escapeHtml(T('Например, кофе'))+'" value="'+(editing ? escapeHtml(editing.label) : '')+'" required></div>'+
+          '<div class="field" style="flex:2;"><label>'+T('Сумма')+' <span class="dim pf-cur"></span></label><input type="number" name="amount" min="0.01" step="0.01" placeholder="0" value="'+(editing ? editing.amount : '')+'" required></div>'+
+        '</div>'+
+        (fins.length>1 ? '<div class="field"><label>'+T('Доска')+'</label><select name="boardId">'+fins.map(function(b){ return '<option value="'+b.id+'"'+(b.id===selB?' selected':'')+'>'+escapeHtml(b.name)+'</option>'; }).join('')+'</select></div>'
+          : '<input type="hidden" name="boardId" value="'+selB+'">')+
+        '<div class="field"><label>'+T('Категория')+'</label><select name="cat" required></select></div>'+
+        '<div class="field"><label>'+T('Списать со счёта')+'</label><select name="balanceId"></select></div>'+
+        '<div class="modal-actions">'+
+          (editing ? '<button type="button" class="btn" data-act="preset-cancel">'+T('Отмена')+'</button>' : '')+
+          '<button type="submit" class="btn primary">'+(editing ? T('Сохранить') : T('Добавить кнопку'))+'</button>'+
+        '</div>'+
+      '</form>';
+    }
+    return '<div class="overlay"><div class="modal narrow presets-modal" data-stop="1">'+
+      '<button class="close-x" data-act="close-modal">✕</button>'+
+      '<h3 class="display">⚡ '+T('Частые траты')+'</h3>'+
+      '<div class="sub">'+T('Кнопки над полем быстрого ввода: одно нажатие — и трата записана в выбранную категорию.')+'</div>'+
+      (rows || '<div class="empty" style="padding:10px 6px 14px;">'+T('Пока нет кнопок. Добавьте, например, «Кофе · 85» или «Проезд · 30».')+'</div>')+
+      '<div class="drawer-hr"></div>'+
+      '<div class="adm-title">'+(editing ? T('Изменить кнопку') : T('Новая кнопка'))+'</div>'+
+      formHtml+
+    '</div></div>';
+  }
+  function wirePresetForm(){
+    var form = document.getElementById('preset-form');
+    if(!form) return;
+    var info = null;
+    try{ info = JSON.parse(form.dataset.pf); }catch(e){ return; }
+    var bEl = form.querySelector('[name=boardId]'), cSel = form.querySelector('select[name=cat]'), aSel = form.querySelector('select[name=balanceId]');
+    var curLbl = form.querySelector('.pf-cur');
+    var first = true;
+    var rebuild = function(){
+      var bd = info.boards.find(function(b){ return b.id===bEl.value; }) || info.boards[0];
+      var prevC = first && info.cur ? info.cur.e+'|'+info.cur.s : cSel.value;
+      cSel.innerHTML = bd.cats.length ? bd.cats.map(function(c){
+        return '<option value="'+c.id+'|">'+escapeHtml(c.name)+' ('+escapeHtml(c.sym)+')</option>'+
+          c.subs.map(function(x){ return '<option value="'+c.id+'|'+x.id+'">'+escapeHtml(c.name)+' › '+escapeHtml(x.name)+'</option>'; }).join('');
+      }).join('') : '<option value="">'+escapeHtml(T('Нет категорий — добавьте их на доске'))+'</option>';
+      if(prevC && cSel.querySelector('option[value="'+prevC+'"]')) cSel.value = prevC;
+      rebuildAcc(bd, first && info.cur ? info.cur.a : aSel.value);
+      first = false;
+    };
+    var rebuildAcc = function(bd, prevA){
+      var cid = cSel.value.split('|')[0];
+      var cat = bd.cats.find(function(c){ return c.id===cid; });
+      var cur = cat ? cat.cur : '';
+      if(curLbl) curLbl.textContent = cur ? '('+(CURRENCIES[cur]||cur)+')' : '';
+      var mains = bd.bals;
+      aSel.innerHTML = '<option value="">'+escapeHtml(T('Основной счёт в этой валюте (как в чате)'))+'</option>'+
+        mains.map(function(x){ return '<option value="'+x.id+'">'+escapeHtml(x.label)+(x.cur!==cur ? ' · '+x.cur+' '+escapeHtml(T('по курсу')) : '')+'</option>'; }).join('')+
+        '<option value="none">'+escapeHtml(T('Не списывать со счёта'))+'</option>';
+      if(prevA!=null && aSel.querySelector('option[value="'+prevA+'"]')) aSel.value = prevA;
+      var af = aSel.closest('.field');
+      if(af) af.style.display = bd.bals.length ? '' : 'none';
+    };
+    if(bEl.tagName==='SELECT') bEl.addEventListener('change', rebuild);
+    cSel.addEventListener('change', function(){ rebuildAcc(info.boards.find(function(b){ return b.id===bEl.value; }) || info.boards[0], aSel.value); });
+    rebuild();
+    form.addEventListener('submit', function(ev){
+      ev.preventDefault();
+      var fd = new FormData(form);
+      var label = String(fd.get('label')||'').trim();
+      var amount = r2(parseFloat(fd.get('amount')));
+      var cat = String(fd.get('cat')||'').split('|');
+      if(!label || !(amount>0)){ showToast(T('Укажите название и сумму')); return; }
+      if(!cat[0]){ showToast(T('Сначала добавьте категорию расходов')); return; }
+      var list = loadPresets();
+      var editId = fd.get('editId');
+      var pr = editId ? list.find(function(x){ return x.id===editId; }) : null;
+      if(!pr){ pr = {id: uid()}; list.push(pr); }
+      pr.label = label; pr.amount = amount; pr.boardId = fd.get('boardId'); pr.expenseId = cat[0]; pr.subId = cat[1] || ''; pr.balanceId = fd.get('balanceId') || '';
+      savePresets(list);
+      state.editing = null;
+      showToast(editId ? T('Кнопка сохранена') : T('Кнопка добавлена — она появится в быстром вводе'));
+      qRenderPresets();
+      render();
+    });
+  }
+
   function qHandle(text){
-    if(adminTryCode(text)) return;
     var p = qParse(text);
     var trimmed = String(text||'').trim();
     var low = qNorm(text);
-    if(/^\?+$/.test(trimmed) || ['помощь','помогите','справка','help','допомога','довідка','команды','команди'].indexOf(low)!==-1){ qHelp(); return; }
+    if(/^\?+$/.test(trimmed) || ['помощь','помогите','справка','help','допомога','довідка','команды','команди','hilfe','ayuda','aide','aiuto','pomoc','ajuda'].indexOf(low)!==-1){ qHelp(); return; }
     if(!low) return;
 
     // привычки: «вода», «вода 2», «спорт»
@@ -2020,9 +2626,9 @@ function lessoncalBoot(){
     }
     if(!p.words.length){
       var firstBal = fins[0].balances[0];
-      qBot(kind==='income'
+      qBot((kind==='income' && firstBal)
         ? T('Куда зачислить? Добавьте счёт:')+' <b>+'+p.amount+' '+escapeHtml(firstBal ? qNorm(firstBal.label) || T('карта') : T('карта'))+'</b>'
-        : T('А на что? Добавьте название:')+' <b>'+T('кофе')+' '+p.amount+'</b>');
+        : (kind==='income' ? T('А на что? Добавьте название:')+' <b>+'+p.amount+' '+T('зарплата')+'</b>' : T('А на что? Добавьте название:')+' <b>'+T('кофе')+' '+p.amount+'</b>'));
       return;
     }
     var target = qFindItem(p.words, kind, p.currency);
@@ -2121,14 +2727,16 @@ function lessoncalBoot(){
     qGreet();
     quick.input.focus();
   }
+  // есть ли вообще счета (баланс ведут не все)
+  function anyBalances(){ return finBoards().some(function(b){ return b.balances.length>0; }); }
   function qHelp(){
+    var hb = anyBalances();
     qBot('<b>'+T('Как писать')+'</b><div class="q-lines">'+
       '<div><b>'+T('кофе 85')+'</b> — '+T('трата сегодня')+'</div>'+
       '<div><b>'+T('такси 200 вчера')+'</b> — '+T('трата за вчера (или дата: 28.09)')+'</div>'+
-      '<div><b>'+T('хлеб 30 карта')+'</b> — '+T('с конкретного счёта, подкатегории тоже находятся')+'</div>'+
-
+      (hb ? '<div><b>'+T('хлеб 30 карта')+'</b> — '+T('с конкретного счёта, подкатегории тоже находятся')+'</div>'+
       '<div><b>'+T('кофе 85 нмб')+'</b> — '+T('записать трату, не меняя баланс')+' («'+T('нмб')+'» = '+T('не менять баланс')+')</div>'+
-      '<div><b>'+T('+500 карта')+'</b> — '+T('пополнить счёт')+'</div>'+
+      '<div><b>'+T('+500 карта')+'</b> — '+T('пополнить счёт')+'</div>' : '')+
       '<div><b>'+T('вода')+'</b> / <b>'+T('вода 2')+'</b> — '+T('отметить привычку')+'</div>'+
       '</div><div class="q-note">'+T('Если категорию не найду — предложу выбрать, и запомню слово на будущее.')+'</div>');
   }
@@ -2177,9 +2785,10 @@ function lessoncalBoot(){
       html = '<div class="qs-sg-title">'+T('Что можно написать')+'</div>'+
         qRow('<b>'+T('название')+'</b> <b>'+T('сумма')+'</b>', T('трата сегодня')+' · '+T('кофе 85'), T('кофе 85'), 'set')+
         qRow('<b>'+T('название')+'</b> <b>'+T('сумма')+'</b> '+T('вчера'), T('или дата, например 28.09'), T('такси 200 вчера'), 'set')+
+        (anyBalances() ?
         qRow('<b>'+T('название')+'</b> <b>'+T('сумма')+'</b> <b>'+T('счёт')+'</b>', T('списать с конкретного счёта'), T('хлеб 30 карта'), 'set')+
         qRow('<b>'+T('название')+'</b> <b>'+T('сумма')+'</b> '+T('нмб'), T('не менять баланс'), T('кофе 85 нмб'), 'set')+
-        qRow('<b>+'+T('сумма')+'</b> <b>'+T('счёт')+'</b>', T('пополнить счёт'), T('+500 карта'), 'set')+
+        qRow('<b>+'+T('сумма')+'</b> <b>'+T('счёт')+'</b>', T('пополнить счёт'), T('+500 карта'), 'set') : '')+
         qRow('<b>'+T('привычка')+'</b>', T('отметить, для счётчика можно добавить число'), T('вода'), 'set');
       quick.suggest.innerHTML = html;
       quick.suggest.hidden = false;
@@ -2205,7 +2814,7 @@ function lessoncalBoot(){
         var acc = qTakeAccount(tp, target.board, target.item.currency, kind==='expense') || qDefaultAccount(target.board, target.item, target.item.currency, kind);
         preview = '<span class="qs-sg-ok">↵</span> <b>'+escapeHtml(target.item.name)+(target.sub ? ' › '+escapeHtml(target.sub.name) : '')+'</b> · '+
           (kind==='income' ? '+' : '−')+fmtMoney2(p.amount, target.item.currency)+
-          (p.noBalance ? ' · <i>'+T('баланс не меняется')+'</i>' : (acc ? ' · '+T('счёт')+' «'+escapeHtml(acc.label || T('счёт'))+'»' : ''))+(p.dateWord ? ' · '+escapeHtml(p.dateWord) : '')+
+ (!target.board.balances.length ? '' : p.noBalance ? ' · <i>'+T('баланс не меняется')+'</i>' : (acc ? ' · '+T('счёт')+' «'+escapeHtml(acc.label || T('счёт'))+'»' : ''))+(p.dateWord ? ' · '+escapeHtml(p.dateWord) : '')+
           (tp.accountMiss ? '<br><span class="qs-sg-warn">!</span> '+T('Счёт')+' «'+escapeHtml(tp.accountMiss)+'» '+T('не найден — использован основной') : '')+
           (tp.accountSecondary && !p.noBalance ? '<br><span class="qs-sg-warn">!</span> «'+escapeHtml(tp.accountSecondary)+'» — '+T('второстепенный, для трат используется основной') : '');
       } else {
@@ -2222,7 +2831,7 @@ function lessoncalBoot(){
       if(hb2) preview = '<span class="qs-sg-ok">↵</span> '+T('Отметить привычку')+' <b>'+escapeHtml(hb2.habit.name)+'</b>';
       else if(!partial) preview = '<span class="qs-sg-warn">…</span> '+T('Добавьте сумму, например')+' «'+escapeHtml(p.rawWords.join(' '))+' 120»';
     } else if(p.amount>0 && !p.words.length){
-      preview = p.sign>0
+      preview = (p.sign>0 && anyBalances())
         ? '<span class="qs-sg-warn">…</span> '+T('Теперь выберите счёт — например,')+' «+'+p.amount+' '+T('карта')+'»'
         : '<span class="qs-sg-warn">…</span> '+T('Теперь напишите, на что — например,')+' «'+T('кофе')+' '+p.amount+'»';
     }
@@ -2246,7 +2855,7 @@ function lessoncalBoot(){
           if(x.label && qNorm(x.label).indexOf(partial)===0 && qNorm(x.label)!==partial && (p.sign>0 || x.kind==='main')) add(escapeHtml(x.label), T('счёт'), qNorm(x.label), 'replace');
         }); });
         [T('вчера'), T('позавчера')].forEach(function(dw){ if(qNorm(dw).indexOf(partial)===0) add(escapeHtml(dw), T('дата'), dw, 'replace'); });
-        if(qNorm(T('нмб')).indexOf(partial)===0 && qNorm(T('нмб'))!==partial) add(escapeHtml(T('нмб')), T('не менять баланс'), T('нмб'), 'replace');
+        if(anyBalances() && qNorm(T('нмб')).indexOf(partial)===0 && qNorm(T('нмб'))!==partial) add(escapeHtml(T('нмб')), T('не менять баланс'), T('нмб'), 'replace');
       }
     } else if(p.sign>0 && p.amount>0 && !topHit && endsSpace){
       // «+500 » — предложить счета для пополнения
@@ -2255,7 +2864,7 @@ function lessoncalBoot(){
       }); });
     } else if(p.amount>0 && p.words.length && endsSpace){
       // после суммы: предложить дату, «нмб» и счёт
-      if(!p.noBalance && p.sign<=0) add(escapeHtml(T('нмб')), T('не менять баланс'), T('нмб'), 'append');
+      if(anyBalances() && !p.noBalance && p.sign<=0) add(escapeHtml(T('нмб')), T('не менять баланс'), T('нмб'), 'append');
       if(!/вчера|вчора|yesterday|позавч|\d+[.\/]\d+/.test(qNorm(text))) add(escapeHtml(T('вчера')), T('дата'), T('вчера'), 'append');
       var shown = 0;
       var tw = qWords(text);
@@ -2335,7 +2944,7 @@ function lessoncalBoot(){
             '<button type="button" class="close-x qs-close" aria-label="'+T('Закрыть')+'">✕</button>'+
           '</div></div>'+
         '<div class="qs-log"></div>'+
-        '<div class="qs-examples">'+qExamples().map(function(x){ return '<button type="button" class="q-chip ex">'+escapeHtml(x)+'</button>'; }).join('')+'</div>'+
+        '<div class="qs-presets"></div>'+
         '<div class="qs-suggest" hidden></div>'+
         '<form class="qs-form" autocomplete="off">'+
           '<input type="text" class="qs-input" enterkeyhint="send" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" placeholder="'+T('Например: кофе 85')+'">'+
@@ -2357,6 +2966,16 @@ function lessoncalBoot(){
         sheet.style.setProperty('--bd', f.toFixed(3));
       }});
     quick.suggest = sheet.querySelector('.qs-suggest');
+    var presetsBox = sheet.querySelector('.qs-presets');
+    presetsBox.addEventListener('pointerdown', function(ev){ if(document.activeElement===quick.input) ev.preventDefault(); });
+    presetsBox.addEventListener('click', function(ev){
+      var b = ev.target.closest('button');
+      if(!b) return;
+      if(b.dataset.qpHelp){ qMsg('me', '?'); qHelp(); return; }
+      if(b.dataset.qpSet){ openPresets(); return; }
+      if(b.dataset.qp) qRunPreset(b.dataset.qp);
+    });
+    qRenderPresets();
     quick.input.addEventListener('input', qUpdateSuggest);
     quick.input.addEventListener('focus', qUpdateSuggest);
     quick.input.addEventListener('blur', function(){ setTimeout(function(){ if(document.activeElement!==quick.input) qHideSuggest(); }, 120); });
@@ -2403,11 +3022,14 @@ function lessoncalBoot(){
     quick.sheet.classList.add('open');
     document.documentElement.classList.add('quick-open');
     if(!quick.greeted) qGreet();
+    qRenderPresets();
+    syncHistory();
     setTimeout(function(){ quick.input.focus(); }, 320);
   }
   function closeQuick(){
     if(!quick.open) return;
     quick.open = false;
+    setTimeout(syncHistory, 0);
     quick.input.blur();
     quick.sheet.classList.add('closing');
     document.documentElement.classList.remove('quick-open');
@@ -2442,7 +3064,12 @@ function lessoncalBoot(){
     var t = todayD();
     var cur = streakHas(d, fmt(t)) ? t : addDays(t, -1);
     var n = 0;
-    while(streakHas(d, fmt(cur))){ n++; cur = addDays(cur, -1); }
+    for(var g=0; g<800; g++){
+      var ds = fmt(cur);
+      if(streakHas(d, ds)) n++;
+      else if(!d.days.length || ds < d.days[0] || !streakRestDay(ds)) break; // день без планов — пропускаем
+      cur = addDays(cur, -1);
+    }
     return n;
   }
   function streakLitToday(d){ return streakHas(d, fmt(todayD())); }
@@ -2461,40 +3088,71 @@ function lessoncalBoot(){
       '<g class="fl-on"><path d="'+outer+'" fill="url(#'+id+'o)"/><path d="'+inner+'" fill="url(#'+id+'i)"/></g>'+
     '</svg>';
   }
-  function streakWeekHtml(d, big){
+  function streakWeekHtml(d, big, hideToday){
     var t = todayD(), todayStr = fmt(t), mon = parseD(weekKey(t));
     var out = '';
     for(var i=0;i<7;i++){
       var ds = fmt(addDays(mon, i));
-      var cls = streakHas(d, ds) ? 'on' : (ds===todayStr ? 'today' : (ds<todayStr ? 'miss' : 'future'));
+      var on = streakHas(d, ds) && !(hideToday && ds===todayStr);
+      var cls = on ? 'on' : (ds===todayStr ? 'today' : (ds<todayStr ? (streakRestDay(ds) ? 'rest' : 'miss') : 'future'));
       out += '<span class="sw-day '+cls+'"'+(ds===todayStr?' data-today="1"':'')+'>'+
         (big ? '<span class="sw-lbl">'+DOW_LABELS[i]+'</span>' : '')+
         '<i>'+(big ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>' : '')+'</i></span>';
     }
     return '<div class="sw-row'+(big?' big':'')+'">'+out+'</div>';
   }
-  // плашка внизу каждой доски
+  // ---------- огонёк = всё запланированное на день выполнено (привычки и планер задач) ----------
+  function streakBoards(){ return state.boards.filter(function(b){ return b.type==='habits' || b.type==='planner'; }); }
+  // сколько запланировано и сколько сделано за день по всем привычкам и задачам
+  function dayGoal(ds){
+    var total = 0, done = 0;
+    streakBoards().forEach(function(b){
+      if(b.type==='habits'){
+        b.habits.forEach(function(h){
+          if(!habitPlanned(h, ds) || habitStart(h) > ds) return;
+          total++; if(habitDone(h, ds)) done++;
+        });
+      } else {
+        scheduleRowsFor(b, ds).forEach(function(r){ total++; if(isDoneOn(r.t, ds)) done++; });
+      }
+    });
+    return {total: total, done: done};
+  }
+  // дни без планов серию не прерывают
+  function streakRestDay(ds){ return dayGoal(ds).total===0; }
+  // плашка — только на досках «Привычки» и «Планер задач»
   function renderStreakBar(){
+    var ab = activeBoard();
+    if(ab.type!=='habits' && ab.type!=='planner') return '';
     var d = loadStreak(), n = streakCount(d), lit = streakLitToday(d);
-    var text = lit
-      ? '<b>'+n+'</b> '+streakDaysWord(n)
-      : (n>0 ? T('Не потеряйте серию!')+' <b>'+n+'</b> '+streakDaysWord(n) : T('Зажгите огонёк на сегодня'));
+    var g = dayGoal(fmt(todayD()));
+    var text = n>0 ? '<b>'+n+'</b> '+streakDaysWord(n) : T('Огонёк ещё не горел');
+    var sub = lit ? T('Сегодня всё выполнено — огонёк горит')
+      : (g.total ? T('Сегодня выполнено')+' '+g.done+' '+T('из')+' '+g.total+' · '+T('сделайте всё — и огонёк загорится') : T('На сегодня ничего не запланировано'));
     return '<button type="button" class="streak-bar'+(lit?' lit':' pending')+'" data-act="open-streak">'+
       '<span class="sb-flame">'+flameSvg(lit?'is-lit':'')+'</span>'+
       '<span class="sb-text"><span class="sb-main">'+text+'</span>'+
-        '<span class="sb-sub">'+(lit ? T('Сегодня огонёк уже горит') : T('Нажмите и смахните вверх'))+'</span></span>'+
+        '<span class="sb-sub">'+sub+'</span></span>'+
       streakWeekHtml(d, false)+
       '<span class="sb-chev">›</span>'+
     '</button>';
   }
   function renderStreakModal(){
-    var d = loadStreak(), n = streakCount(d), lit = streakLitToday(d);
-    var free = streakFree();
+    var d = loadStreak(), igniting = !!state.streakIgnite;
+    var lit = streakLitToday(d) && !igniting;
+    var n = streakCount(d);
     var sparks = '';
     for(var i=0;i<14;i++){
       var a = Math.round(i*360/14 + (i%2 ? 9 : -6));
       sparks += '<i style="--a:'+a+'deg;--d:'+(70 + (i*37)%46)+'px;--s:'+(0.6 + (i%4)*0.18).toFixed(2)+';--dl:'+((i%5)*0.03).toFixed(2)+'s"></i>';
     }
+    var g = dayGoal(fmt(todayD()));
+    var note;
+    if(igniting) note = '<div class="st-done hidden" id="st-done">'+T('Всё запланированное на сегодня выполнено! Возвращайтесь завтра, чтобы продолжить серию.')+'</div>';
+    else if(lit) note = '<div class="st-done">'+T('Сегодня всё выполнено — огонёк горит. Возвращайтесь завтра, чтобы продолжить серию!')+'</div>';
+    else if(g.total) note = '<div class="st-progress"><div class="budget-bar"><i style="width:'+Math.round(g.done/g.total*100)+'%"></i></div>'+
+      '<div class="st-hint">'+T('Сегодня выполнено')+' <b>'+g.done+' '+T('из')+' '+g.total+'</b>. '+T('Выполните все привычки и задачи на сегодня — огонёк загорится сам.')+'</div></div>';
+    else note = '<div class="st-done">'+T('На сегодня ничего не запланировано — серия не прервётся.')+'</div>';
     return '<div class="overlay"><div class="modal streak-modal" data-stop="1">'+
       '<button class="close-x" data-act="close-modal">✕</button>'+
       '<div class="st-stage'+(lit?' lit':'')+'" id="st-stage" style="--p:'+(lit?1:0)+'">'+
@@ -2502,48 +3160,27 @@ function lessoncalBoot(){
         '<div class="st-sparks">'+sparks+'</div>'+
         flameSvg('st-flame')+
       '</div>'+
-      '<div class="st-count" id="st-count"><span class="st-num cur">'+n+'</span></div>'+
-      '<div class="st-label" id="st-label">'+streakDaysWord(n)+'</div>'+
-      streakWeekHtml(d, true)+
-      ((lit && !free)
-        ? '<div class="st-done">'+T('Сегодня огонёк уже горит. Возвращайтесь завтра, чтобы продолжить серию!')+'</div>'
-        : '<div class="st-swipe" id="st-swipe" data-nodrag="1">'+
-            '<div class="st-track"><div class="st-trail"></div>'+
-              '<button type="button" class="st-knob" id="st-knob" aria-label="'+T('Зажечь огонёк')+'">'+
-                '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V6M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'+
-              '</button></div>'+
-            '<div class="st-hint">'+T('Смахните вверх, чтобы зажечь огонёк')+'</div>'+
-          '</div>'+
-          '<div class="st-done hidden" id="st-done">'+T('Отлично! Возвращайтесь завтра, чтобы продолжить серию.')+'</div>')+
+      '<div class="st-count" id="st-count"><span class="st-num cur">'+(igniting ? Math.max(0, n-1) : n)+'</span></div>'+
+      '<div class="st-label" id="st-label">'+streakDaysWord(igniting ? Math.max(0, n-1) : n)+'</div>'+
+      streakWeekHtml(d, true, igniting)+
+      note+
       '<div class="st-stats">'+
         '<div><span>'+T('Рекорд')+'</span><b id="st-best">'+Math.max(d.best, n)+'</b></div>'+
         '<div><span>'+T('Всего дней')+'</span><b id="st-total">'+d.days.length+'</b></div>'+
       '</div>'+
     '</div></div>';
   }
+  // анимация «огонёк загорелся» (запись дня делает autoStreakCheck)
   function igniteStreak(){
     var d = loadStreak();
-    var free = streakFree();
-    if(streakLitToday(d) && !free) return;
-    var before = streakCount(d);
-    if(!streakLitToday(d)) d.days.push(fmt(todayD()));
-    else {
-      // свободный режим: удлиняем серию на день назад
-      var first = addDays(todayD(), -(before-1));
-      while(streakHas(d, fmt(first))) first = addDays(first, -1);
-      d.days.push(fmt(first));
-      d.days.sort();
-    }
-    var after = streakCount(d);
-    d.best = Math.max(d.best, after);
-    saveStreak(d);
+    var after = streakCount(d), before = Math.max(0, after-1);
+    state.streakIgnite = false;
     var stage = document.getElementById('st-stage');
     if(stage){
       stage.style.setProperty('--p', '1');
       stage.classList.add('lit', 'igniting');
     }
     if(navigator.vibrate){ try{ navigator.vibrate([18, 40, 28]); }catch(e){} }
-    // счётчик «прокручивается» на новое число
     var cnt = document.getElementById('st-count');
     if(cnt){
       cnt.innerHTML = '<span class="st-num old">'+before+'</span><span class="st-num new">'+after+'</span>';
@@ -2553,13 +3190,22 @@ function lessoncalBoot(){
     if(lbl) lbl.textContent = (before===0 && d.days.length>1 ? T('Новая серия!')+' ' : '') + streakDaysWord(after);
     var day = document.querySelector('.streak-modal .sw-day[data-today]');
     if(day){ day.classList.remove('today'); day.classList.add('on', 'pop'); }
-    var sw = document.getElementById('st-swipe');
-    if(sw) sw.classList.add('gone');
     var done = document.getElementById('st-done');
     if(done) done.classList.remove('hidden');
-    var best = document.getElementById('st-best'); if(best) best.textContent = d.best;
-    var tot = document.getElementById('st-total'); if(tot) tot.textContent = d.days.length;
-    if(free) setTimeout(function(){ if(state.modal==='streak') render(); }, 1800);
+  }
+  // после отметки привычки или задачи: если на сегодня всё сделано — огонёк загорается и показывается окно
+  function autoStreakCheck(){
+    var d = loadStreak();
+    if(streakLitToday(d)) return;
+    var g = dayGoal(fmt(todayD()));
+    if(!(g.total>0 && g.done>=g.total)) return;
+    d.days.push(fmt(todayD()));
+    d.best = Math.max(d.best, streakCount(d));
+    saveStreak(d);
+    state.streakIgnite = true;
+    state.modal = 'streak'; state.menuOpen = false;
+    render();
+    setTimeout(function(){ if(state.modal==='streak') igniteStreak(); else state.streakIgnite = false; }, 450);
   }
   // жест «смахнуть вверх» на ручке
   function wireStreakSwipe(){
@@ -2612,53 +3258,27 @@ function lessoncalBoot(){
   }
 
   // =====================================================================
-  // ---------- АДМИН-ПАНЕЛЬ (для тестирования; работает только на этом устройстве) ----------
-  // Вход: 50 нажатий на версию в настройках → в быстром вводе «admin.give.50».
-  // Это не защита (код открыт), а скрытое меню для разработчиков.
+  // ---------- ЭКСПЕРИМЕНТАЛЬНЫЕ НАСТРОЙКИ (внизу настроек) ----------
+  // Только безобидное: тестовая дата и шаблоны досок. Действует на этом устройстве.
   // =====================================================================
-  var ADMIN_KEY = 'lessoncal_admin', FAKE_KEY = 'lessoncal_fake_today', STREAK_FREE_KEY = 'lessoncal_streak_free';
-  var APP_VERSION = '2.0';
-  function isAdmin(){ try{ return localStorage.getItem(ADMIN_KEY)==='1'; }catch(e){ return false; } }
-  function streakFree(){ try{ return isAdmin() && localStorage.getItem(STREAK_FREE_KEY)==='1'; }catch(e){ return false; } }
-  var adminGate = {taps: 0, last: 0, armedAt: 0};
-  function versionTap(el){
-    var now = Date.now();
-    if(now - adminGate.last > 2500) adminGate.taps = 0;
-    adminGate.last = now;
-    adminGate.taps++;
-    if(el){ el.classList.remove('tap'); void el.offsetWidth; el.classList.add('tap'); }
-    if(adminGate.taps >= 50){
-      adminGate.taps = 0;
-      adminGate.armedAt = now;
-      if(navigator.vibrate){ try{ navigator.vibrate([10, 50, 10]); }catch(e){} }
-      state.modal = null; render();
-      openQuick(true);
-    }
+  var FAKE_KEY = 'lessoncal_fake_offset';
+  var APP_VERSION = '2.2';
+  // подменить дату и время: ds — «ГГГГ-ММ-ДД», hm — «ЧЧ:ММ» (пусто — оставить текущее время)
+  function setFakeNow(ds, hm){
+    var cur = nowD(), p = (ds || fmt(cur)).split('-'), t = String(hm || '').split(':');
+    var h = t[0]!=='' && !isNaN(+t[0]) ? +t[0] : cur.getHours(), m = t[1]!=null && !isNaN(+t[1]) ? +t[1] : cur.getMinutes();
+    var target = new Date(+p[0], +p[1]-1, +p[2], h, m, 0);
+    applyFakeOffset(target - Date.now());
   }
-  function adminTryCode(text){
-    if(String(text||'').trim().toLowerCase()!=='admin.give.50') return false;
-    if(!isAdmin() && !(adminGate.armedAt && Date.now()-adminGate.armedAt < 120000)) return false;
-    try{ localStorage.setItem(ADMIN_KEY, '1'); }catch(e){}
-    adminGate.armedAt = 0;
-    qBot('🛠 <b>Админ-режим включён</b><div class="q-lines"><div>Панель доступна в настройках и по этой же команде.</div></div>',
-      [{label: 'Открыть панель', primary: true, fn: function(){ closeQuick(); state.modal = 'admin'; state.menuOpen = false; render(); }}]);
-    return true;
-  }
-  function setFakeToday(ds){
-    FAKE_TODAY = (ds && isValidDs(ds)) ? ds : '';
-    try{ if(FAKE_TODAY) localStorage.setItem(FAKE_KEY, FAKE_TODAY); else localStorage.removeItem(FAKE_KEY); }catch(e){}
+  function shiftFakeNow(ms){ applyFakeOffset(FAKE_OFFSET + ms); }
+  function resetFakeNow(){ applyFakeOffset(0); }
+  function applyFakeOffset(off){
+    FAKE_OFFSET = Math.abs(off) < 60000 ? 0 : off;
+    try{ if(FAKE_OFFSET) localStorage.setItem(FAKE_KEY, String(FAKE_OFFSET)); else localStorage.removeItem(FAKE_KEY); }catch(e){}
     state.viewDate = startOfMonth(todayD());
     state.weekStart = null;
     state.scheduleDay = todayD().getDay();
     render();
-  }
-  function setStreakTo(n, includeToday, best){
-    var d = loadStreak(), t = todayD();
-    var end = includeToday ? t : addDays(t, -1);
-    d.days = [];
-    for(var i=n-1; i>=0; i--) d.days.push(fmt(addDays(end, -i)));
-    d.best = Math.max(n, best||0);
-    saveStreak(d);
   }
 
   // ---------- шаблоны тестовых досок ----------
@@ -2666,18 +3286,18 @@ function lessoncalBoot(){
   function tplDs(n){ return fmt(addDays(todayD(), n)); }
   function tplMonthDay(back, day){ var t = todayD(); var d = new Date(t.getFullYear(), t.getMonth()-back, 1); return fmt(new Date(d.getFullYear(), d.getMonth(), Math.min(day, daysInMonthOf(d.getFullYear(), d.getMonth())))); }
   function tplFinance(){
-    var b = newBoard('🧪 Финансы', 'finance'); b.test = true;
+    var b = newBoard(T('🧪 Финансы'), 'finance'); b.test = true;
     var t = todayD(), rnd = tplRand(7);
-    var card = {id: uid(), label: 'Карта', amount: 25000, currency: 'UAH', kind: 'main', history: []};
-    var usd = {id: uid(), label: 'Доллары', amount: 300, currency: 'USD', kind: 'main', history: []};
-    var cash = {id: uid(), label: 'Наличные', amount: 1500, currency: 'UAH', kind: 'secondary', history: []};
+    var card = {id: uid(), label: T('Карта'), amount: 25000, currency: 'UAH', kind: 'main', history: []};
+    var usd = {id: uid(), label: T('Доллары'), amount: 300, currency: 'USD', kind: 'main', history: []};
+    var cash = {id: uid(), label: T('Наличные'), amount: 1500, currency: 'UAH', kind: 'secondary', history: []};
     b.balances = [card, usd, cash];
     b.rates = {USD_UAH: 41.5, EUR_UAH: 45};
     var payDay = Math.min(t.getDate(), 28);
-    var salary = {id: uid(), name: 'Зарплата', color: 'sage', amount: 40000, currency: 'UAH', scheduleType: 'monthly', dayOfMonth: payDay,
+    var salary = {id: uid(), name: T('Зарплата'), color: 'sage', amount: 40000, currency: 'UAH', scheduleType: 'monthly', dayOfMonth: payDay,
       history: [], confirmed: {}, postponed: {}, skipped: [], createdAt: fmt(t)};
     for(var k=1;k<=5;k++){ var od = tplMonthDay(k, payDay); salary.history.push({id: uid(), date: od, amount: 40000, balanceId: card.id, occ: od, noCard: true}); salary.confirmed[od] = salary.history[salary.history.length-1].id; }
-    var freelance = {id: uid(), name: 'Фриланс', color: 'sky', amount: 0, currency: 'UAH', scheduleType: 'once', date: tplDs(5), dayOfMonth: 1,
+    var freelance = {id: uid(), name: T('Фриланс'), color: 'sky', amount: 0, currency: 'UAH', scheduleType: 'once', date: tplDs(5), dayOfMonth: 1,
       history: [{id: uid(), date: tplMonthDay(1, 14), amount: 6500}, {id: uid(), date: tplMonthDay(3, 9), amount: 4200}], confirmed: {}, postponed: {}, skipped: [], createdAt: fmt(t)};
     freelance.amount = 10700;
     b.income = [salary, freelance];
@@ -2698,20 +3318,20 @@ function lessoncalBoot(){
       }
       return e;
     }
-    var shop = exp('Магазин', 'amber', 6000, ['Хлеб', 'Молоко', 'Овощи'], 6200, 5);
-    var cafe = exp('Кафе', 'clay', 1500, [], 1900, 4);
-    var taxi = exp('Такси', 'lilac', 0, [], 900, 2);
-    var rent = {id: uid(), name: 'Аренда', color: 'rose', amount: 45000, currency: 'UAH', budget: 0, subs: [], history: [], aliases: [],
+    var shop = exp(T('Магазин'), 'amber', 6000, [T('Хлеб'), T('Молоко'), T('Овощи')], 6200, 5);
+    var cafe = exp(T('Кафе'), 'clay', 1500, [], 1900, 4);
+    var taxi = exp(T('Такси'), 'lilac', 0, [], 900, 2);
+    var rent = {id: uid(), name: T('Аренда'), color: 'rose', amount: 45000, currency: 'UAH', budget: 0, subs: [], history: [], aliases: [],
       recurring: {scheduleType: 'monthly', amount: 9000, dayOfMonth: t.getDate(), balanceId: card.id, confirmed: {}, postponed: {}, skipped: [], createdAt: fmt(t)}};
     for(var r=1;r<=5;r++) rent.history.push({id: uid(), date: tplMonthDay(r, t.getDate()), amount: 9000, balanceId: card.id, balAmount: 9000});
-    var util = {id: uid(), name: 'Коммуналка', color: 'aqua', amount: 0, currency: 'UAH', budget: 0, subs: [], history: [], aliases: ['свет', 'газ'],
+    var util = {id: uid(), name: T('Коммуналка'), color: 'aqua', amount: 0, currency: 'UAH', budget: 0, subs: [], history: [], aliases: [T('свет'), T('газ')],
       recurring: {scheduleType: 'monthly', amount: 1800, dayOfMonth: addDays(t, 2).getDate(), balanceId: card.id, confirmed: {}, postponed: {}, skipped: [], createdAt: fmt(t)}};
     b.expenses = [shop, cafe, taxi, rent, util];
     return b;
   }
   function tplSubs(fin){
-    var b = newBoard('🧪 Подписки', 'subs'); b.test = true;
-    var link = fin ? {boardId: fin.id, expenseId: '', balanceId: fin.balances[0].id} : null;
+    var b = fin;
+    var link = {boardId: fin.id, expenseId: '', balanceId: fin.balances[0].id};
     function sub(name, color, amount, cur, period, start, extra){
       var x = {id: uid(), name: name, color: color, amount: amount, currency: cur, period: period, startDate: start, active: true,
         paid: {}, skipped: [], history: [], createdAt: tplDs(-1), financeLink: link};
@@ -2730,15 +3350,16 @@ function lessoncalBoot(){
       sub('iCloud', 'sky', 99, 'UAH', 'year', tplDs(-200)),
       sub('Duolingo', 'olive', 7, 'USD', 'month', tplDs(-5), {active: false})
     ];
+    b.subs.forEach(function(x){ x.financeLink = null; ensureSubCategory(b, x); });
     return b;
   }
   function tplHabits(){
-    var b = newBoard('🧪 Привычки', 'habits'); b.test = true;
+    var b = newBoard(T('🧪 Привычки'), 'habits'); b.test = true;
     var t = todayD(), rnd = tplRand(3);
     function hb(name, color, kind, target, unit, days){ return {id: uid(), name: name, color: color, kind: kind, target: target, unit: unit, days: days || DOW_VALUES.slice(), log: {}, createdAt: tplDs(-30)}; }
-    var water = hb('Вода', 'aqua', 'count', 8, 'стаканов');
-    var sport = hb('Спорт', 'clay', 'check', 1, '', [1, 3, 5]);
-    var read = hb('Чтение', 'lilac', 'count', 20, 'мин');
+    var water = hb(T('Вода'), 'aqua', 'count', 8, T('стаканов'));
+    var sport = hb(T('Спорт'), 'clay', 'check', 1, '', [1, 3, 5]);
+    var read = hb(T('Чтение'), 'lilac', 'count', 20, T('мин'));
     for(var i=1;i<=30;i++){
       var ds = fmt(addDays(t, -i)), dow = addDays(t, -i).getDay();
       if(i<=12 || rnd()>0.35) water.log[ds] = i===5 ? 5 : 8;
@@ -2750,37 +3371,33 @@ function lessoncalBoot(){
     return b;
   }
   function tplLessons(){
-    var b = newBoard('🧪 Занятия', 'lessons'); b.test = true;
-    var en = {id: uid(), name: 'Английский', color: 'sky', days: [1, 3, 5], startDate: tplDs(-60), planType: 'dynamic', total: 0, paidUntil: '', timeStart: '16:00', timeEnd: '17:00', cancelled: [], rescheduled: {}, payments: []};
-    var swim = {id: uid(), name: 'Плавание', color: 'sage', days: [2, 4], startDate: tplDs(-40), planType: 'static', total: 0, paidUntil: tplDs(2), timeStart: '08:00', timeEnd: '09:00', cancelled: [], rescheduled: {}, payments: []};
-    var guitar = {id: uid(), name: 'Гитара', color: 'clay', days: [6], startDate: tplDs(-20), planType: 'dynamic', total: 16, paidUntil: '', timeStart: '12:00', timeEnd: '13:00', cancelled: [], rescheduled: {}, payments: [{id: uid(), date: tplDs(-20), amount: 3200, currency: 'UAH', lessons: 16, until: '', prevUntil: '', finance: null}]};
+    var b = newBoard(T('🧪 Занятия'), 'lessons'); b.test = true;
+    var en = {id: uid(), name: T('Английский'), color: 'sky', days: [1, 3, 5], startDate: tplDs(-60), planType: 'dynamic', total: 0, paidUntil: '', timeStart: '16:00', timeEnd: '17:00', cancelled: [], rescheduled: {}, payments: []};
+    var swim = {id: uid(), name: T('Плавание'), color: 'sage', days: [2, 4], startDate: tplDs(-40), planType: 'static', total: 0, paidUntil: tplDs(2), timeStart: '08:00', timeEnd: '09:00', cancelled: [], rescheduled: {}, payments: []};
+    var guitar = {id: uid(), name: T('Гитара'), color: 'clay', days: [6], startDate: tplDs(-20), planType: 'dynamic', total: 16, paidUntil: '', timeStart: '12:00', timeEnd: '13:00', cancelled: [], rescheduled: {}, payments: [{id: uid(), date: tplDs(-20), amount: 3200, currency: 'UAH', lessons: 16, until: '', prevUntil: '', finance: null}]};
     b.subjects = [en, swim, guitar];
     normalizeBoard(b);
     en.total = Math.max(1, en.total - remaining(en) + 1); // остался ровно 1 урок — сработает напоминание
     return b;
   }
   function tplPlanner(){
-    var b = newBoard('🧪 Задачи', 'planner'); b.test = true;
+    var b = newBoard(T('🧪 Задачи'), 'planner'); b.test = true;
     var t = todayD(), dow = t.getDay();
     function task(name, color, notes, times){ return {id: uid(), name: name, color: color, notes: notes, times: times}; }
     function tm(day, s, e, extra){ var x = {id: uid(), day: day, date: '', timeStart: s, timeEnd: e, doneWeeks: []}; for(var k in (extra||{})) x[k] = extra[k]; return x; }
     var wk = weekKey(t);
     b.scheduleItems = [
-      task('Купить продукты', 'aqua', 'Молоко, хлеб, сыр', [tm(dow, '10:00', '11:00'), tm((dow+3)%7, '18:00', '19:00')]),
-      task('Тренировка', 'clay', '', [tm(1, '07:00', '08:00', {doneWeeks: [wk]}), tm(3, '07:00', '08:00'), tm(5, '07:00', '08:00')]),
-      task('Позвонить маме', 'rose', '', [tm(addDays(t,1).getDay(), '', '', {date: tplDs(1)})]),
-      task('Очень длинное название задачи для проверки многоточия в неделе', 'lilac', 'Длинное описание, чтобы проверить кнопку «…»', [tm(dow, '14:00', '15:00')])
+      task(T('Купить продукты'), 'aqua', T('Молоко, хлеб, сыр'), [tm(dow, '10:00', '11:00'), tm((dow+3)%7, '18:00', '19:00')]),
+      task(T('Тренировка'), 'clay', '', [tm(1, '07:00', '08:00', {doneWeeks: [wk]}), tm(3, '07:00', '08:00'), tm(5, '07:00', '08:00')]),
+      task(T('Позвонить маме'), 'rose', '', [tm(addDays(t,1).getDay(), '', '', {date: tplDs(1)})]),
+      task(T('Очень длинное название задачи для проверки многоточия в неделе'), 'lilac', T('Длинное описание, чтобы проверить кнопку «…»'), [tm(dow, '14:00', '15:00')])
     ];
     return b;
   }
   function addTemplate(kind){
     var made = [];
     var fin = null;
-    if(kind==='finance' || kind==='all'){ fin = tplFinance(); made.push(fin); }
-    if(kind==='subs' || kind==='all'){
-      if(!fin) fin = state.boards.find(function(x){ return x.type==='finance' && x.test; }) || null;
-      made.push(tplSubs(fin));
-    }
+    if(kind==='finance' || kind==='all'){ fin = tplFinance(); tplSubs(fin); made.push(fin); }
     if(kind==='habits' || kind==='all') made.push(tplHabits());
     if(kind==='lessons' || kind==='all') made.push(tplLessons());
     if(kind==='planner' || kind==='all') made.push(tplPlanner());
@@ -2788,13 +3405,13 @@ function lessoncalBoot(){
     state.activeBoardId = made[0].id;
     state.modal = null;
     pendingAnim = 'enter';
-    showToast('Создано тестовых досок: '+made.length);
+    showToast(T('Создано тестовых досок')+': '+made.length);
     saveData();
   }
   function removeTestBoards(){
     var n = state.boards.filter(function(b){ return b.test; }).length;
-    if(!n){ showToast('Тестовых досок нет'); return; }
-    withUndo('Удалено тестовых досок: '+n, function(){
+    if(!n){ showToast(T('Тестовых досок нет')); return; }
+    withUndo(T('Удалено тестовых досок')+': '+n, function(){
       state.boards = state.boards.filter(function(b){ return !b.test; });
       if(!state.boards.length) state.boards.push(newBoard(T('Мой календарь'), 'lessons'));
       if(!state.boards.some(function(b){ return b.id===state.activeBoardId; })) state.activeBoardId = state.boards[0].id;
@@ -2803,54 +3420,40 @@ function lessoncalBoot(){
   }
 
   function renderAdminModal(){
-    var d = loadStreak(), n = streakCount(d), lit = streakLitToday(d);
-    var realToday = (function(){ var x = new Date(); return fmt(new Date(x.getFullYear(), x.getMonth(), x.getDate())); })();
+    var nowStr = fmtHuman(fmt(todayD()))+', '+fmtTime(nowHM());
     var testCount = state.boards.filter(function(b){ return b.test; }).length;
     var tplBtn = function(k, label){ return '<button type="button" class="btn small" data-act="admin-tpl" data-kind="'+k+'">'+label+'</button>'; };
     return '<div class="overlay"><div class="modal narrow admin-modal" data-stop="1">'+
       '<button class="close-x" data-act="close-modal">✕</button>'+
-      '<h3 class="display">🛠 Админ-панель</h3>'+
-      '<div class="sub">Инструменты для тестирования. Действуют только на этом устройстве.</div>'+
+      '<h3 class="display">🧪 '+T('Экспериментальные настройки')+'</h3>'+
+      '<div class="sub">'+T('Инструменты для проверки приложения. Действуют только на этом устройстве.')+'</div>'+
 
-      '<div class="adm-sec"><div class="adm-title">Тестовая дата</div>'+
-        '<div class="adm-note">'+(FAKE_TODAY ? 'Сейчас приложение думает, что сегодня <b>'+fmtHuman(FAKE_TODAY)+'</b>.' : 'Используется настоящая дата.')+'</div>'+
+      '<div class="adm-sec"><div class="adm-title">'+T('Тестовые дата и время')+'</div>'+
+        '<div class="adm-note">'+(FAKE_OFFSET ? T('Сейчас приложение думает, что сейчас')+' <b>'+nowStr+'</b>.' : T('Используются настоящие дата и время.'))+'</div>'+
         '<div class="adm-row">'+
-          '<input type="date" id="adm-date" value="'+(FAKE_TODAY || realToday)+'">'+
-          '<button type="button" class="btn small primary" data-act="admin-date-set">Применить</button>'+
+          '<input type="date" id="adm-date" value="'+fmt(todayD())+'">'+
+          '<input type="time" id="adm-time" value="'+nowHM()+'">'+
+          '<button type="button" class="btn small primary" data-act="admin-date-set">'+T('Применить')+'</button>'+
         '</div>'+
-        '<div class="adm-row">'+
-          '<button type="button" class="btn small" data-act="admin-date-shift" data-days="-1">−1 день</button>'+
-          '<button type="button" class="btn small" data-act="admin-date-shift" data-days="1">+1 день</button>'+
-          '<button type="button" class="btn small" data-act="admin-date-shift" data-days="7">+1 неделя</button>'+
-          '<button type="button" class="btn small" data-act="admin-date-shift" data-days="30">+30 дней</button>'+
-          (FAKE_TODAY ? '<button type="button" class="btn small danger" data-act="admin-date-reset">Сбросить</button>' : '')+
-        '</div>'+
-      '</div>'+
-
-      '<div class="adm-sec"><div class="adm-title">Огонёк</div>'+
-        '<div class="adm-note">Серия: <b>'+n+'</b> · рекорд: <b>'+Math.max(d.best, n)+'</b> · всего дней: <b>'+d.days.length+'</b> · сегодня '+(lit ? 'зажжён' : 'не зажжён')+'</div>'+
-        '<div class="adm-row">'+
-          '<input type="number" id="adm-streak" min="0" max="3650" value="'+n+'" style="width:96px;">'+
-          '<label class="adm-check"><input type="checkbox" id="adm-streak-today"'+(lit?' checked':'')+'> включая сегодня</label>'+
-          '<button type="button" class="btn small primary" data-act="admin-streak-set">Выставить</button>'+
-        '</div>'+
-        '<div class="adm-row">'+
-          '<button type="button" class="btn small danger" data-act="admin-streak-reset">Сбросить огонёк</button>'+
-        '</div>'+
-        '<label class="switch-label" style="margin-top:8px !important;"><span>Свободный режим — зажигать сколько угодно раз</span><input type="checkbox" class="switch" id="adm-streak-free"'+(streakFree()?' checked':'')+'></label>'+
-      '</div>'+
-
-      '<div class="adm-sec"><div class="adm-title">Шаблоны для тестов</div>'+
-        '<div class="adm-note">Создают готовые доски с данными на сегодняшнюю (или тестовую) дату: выплаты и платежи, которые ждут подтверждения, бюджеты, график за 6 месяцев, подписки, связанные с финансами, серии привычек.</div>'+
         '<div class="adm-row wrap">'+
-          tplBtn('all', '✨ Всё сразу')+tplBtn('finance', 'Финансы')+tplBtn('subs', 'Подписки')+
-          tplBtn('habits', 'Привычки')+tplBtn('lessons', 'Занятия')+tplBtn('planner', 'Задачи')+
+          '<button type="button" class="btn small" data-act="admin-time-shift" data-min="-60">'+T('−1 час')+'</button>'+
+          '<button type="button" class="btn small" data-act="admin-time-shift" data-min="60">'+T('+1 час')+'</button>'+
+          '<button type="button" class="btn small" data-act="admin-date-shift" data-days="-1">'+T('−1 день')+'</button>'+
+          '<button type="button" class="btn small" data-act="admin-date-shift" data-days="1">'+T('+1 день')+'</button>'+
+          '<button type="button" class="btn small" data-act="admin-date-shift" data-days="7">'+T('+1 неделя')+'</button>'+
+          '<button type="button" class="btn small" data-act="admin-date-shift" data-days="30">'+T('+30 дней')+'</button>'+
         '</div>'+
-        (testCount ? '<div class="adm-row"><button type="button" class="btn small danger" data-act="admin-tpl-remove">Удалить тестовые доски ('+testCount+')</button></div>' : '')+
+        '<button type="button" class="btn adm-reset'+(FAKE_OFFSET ? ' danger' : '')+'" data-act="admin-date-reset"'+(FAKE_OFFSET ? '' : ' disabled')+'>↺ '+T('Сбросить на настоящие дату и время')+'</button>'+
       '</div>'+
 
-      '<div class="adm-sec"><button type="button" class="btn danger" style="width:100%;" data-act="admin-exit">Выйти из админ-режима</button>'+
-        '<div class="adm-note" style="margin-top:6px;">Тестовая дата и свободный режим огонька тоже выключатся.</div></div>'+
+      '<div class="adm-sec"><div class="adm-title">'+T('Шаблоны досок')+'</div>'+
+        '<div class="adm-note">'+T('Создают готовые доски с примерами данных: выплаты и платежи, которые ждут подтверждения, бюджеты, график за 6 месяцев, подписки, связанные с финансами, серии привычек. Такие доски помечены 🧪 и удаляются одной кнопкой.')+'</div>'+
+        '<div class="adm-row wrap">'+
+          tplBtn('all', '✨ '+T('Всё сразу'))+tplBtn('finance', T('Финансы'))+
+          tplBtn('habits', T('Привычки'))+tplBtn('lessons', T('Занятия'))+tplBtn('planner', T('Задачи'))+
+        '</div>'+
+        (testCount ? '<div class="adm-row"><button type="button" class="btn small danger" data-act="admin-tpl-remove">'+T('Удалить тестовые доски')+' ('+testCount+')</button></div>' : '')+
+      '</div>'+
     '</div></div>';
   }
 
@@ -2862,9 +3465,8 @@ function lessoncalBoot(){
   function isOnboarded(){ try{ return localStorage.getItem(ONB_KEY)==='1'; }catch(e){ return true; } }
   var ONB_TYPES = [
     {t: 'lessons',  ico: '📚', c: '#0a84ff', d: 'Курсы и уроки: сколько осталось оплаченных и когда продлевать'},
-    {t: 'finance',  ico: '💳', c: '#30d158', d: 'Доходы, расходы, балансы и бюджеты'},
+    {t: 'finance',  ico: '💳', c: '#30d158', d: 'Доходы, расходы, подписки, балансы и бюджеты'},
     {t: 'habits',   ico: '🔥', c: '#ff9f0a', d: 'Отмечайте каждый день и держите серию'},
-    {t: 'subs',     ico: '🔁', c: '#ff375f', d: 'Netflix, Spotify и другие — напомнит о списании'},
     {t: 'planner',  ico: '✅', c: '#64d2ff', d: 'Задачи по дням недели с отметками «выполнено»'},
     {t: 'events',   ico: '🎉', c: '#bf5af2', d: 'Дни рождения и важные даты'},
     {t: 'schedule', ico: '🗓', c: '#5e5ce6', d: 'Расписание уроков или пар по дням недели'}
@@ -2894,7 +3496,7 @@ function lessoncalBoot(){
           '<h2>'+T('Добро пожаловать!')+'</h2>'+
           '<p>'+T('Занятия, деньги, привычки и задачи — в одном календаре. Всё хранится только на вашем устройстве.')+'</p>'+
         '</div>'+
-        '<div class="onb-lang">'+[['ru','Русский'],['uk','Українська'],['en','English']].map(function(l){
+        '<div class="onb-lang">'+LANGS.map(function(c){ return [c, LANG_NAMES[c]]; }).map(function(l){
           return '<button type="button" class="onb-chip'+(LANG===l[0]?' on':'')+'" data-act="onb-lang" data-lang="'+l[0]+'">'+l[1]+'</button>';
         }).join('')+'</div>';
       actions = '<button type="button" class="btn primary onb-main" data-act="onb-next">'+T('Начать')+'</button>';
@@ -2910,7 +3512,7 @@ function lessoncalBoot(){
       actions = '<button type="button" class="btn onb-back" data-act="onb-back">'+T('Назад')+'</button>'+
         '<button type="button" class="btn primary onb-main" data-act="onb-next" id="onb-types-next"'+(o.types.length?'':' disabled')+'>'+T('Продолжить')+'</button>';
     } else if(step==='account'){
-      body = '<h2>'+T('Ваш основной счёт')+'</h2><p>'+T('Чтобы траты и доходы сразу меняли баланс. Можно пропустить и добавить позже.')+'</p>'+
+      body = '<h2>'+T('Ваш основной счёт')+'</h2><p>'+T('Чтобы траты и доходы сразу меняли баланс. Можно пропустить и добавить позже.')+' '+T('Вести баланс не обязательно — всё работает и без него.')+'</p>'+
         '<div class="field"><label>'+T('Название')+'</label><input type="text" id="onb-acc-label" value="'+escapeHtml(o.acc.label)+'"></div>'+
         '<div class="field-row">'+
           '<div class="field" style="flex:2;"><label>'+T('Сколько сейчас')+'</label><input type="number" id="onb-acc-amount" min="0" step="0.01" inputmode="decimal" placeholder="0" value="'+escapeHtml(o.acc.amount)+'"></div>'+
@@ -2924,7 +3526,7 @@ function lessoncalBoot(){
         ['☰', T('Доски'), T('Переключайтесь между досками и создавайте новые в меню слева сверху.')],
         ['📅', T('Нажмите на день'), T('Откроются все записи и действия на этот день.')],
         ['💬', T('Быстрый ввод'), T('На телефоне кнопка справа внизу: напишите «кофе 85» — и трата записана.')],
-        ['🔥', T('Огонёк'), T('Заходите каждый день и зажигайте огонёк внизу экрана — держите серию.')]
+        ['🔥', T('Огонёк'), T('Выполните все привычки и задачи на день — огонёк загорится сам. Держите серию!')]
       ];
       body = '<h2>'+T('Всё готово!')+'</h2><p>'+T('Пара подсказок, чтобы быстрее освоиться:')+'</p>'+
         '<div class="onb-tips">'+tips.map(function(t, k){
@@ -2943,7 +3545,7 @@ function lessoncalBoot(){
   function onbReadAccount(){
     var o = state.onb;
     var l = document.getElementById('onb-acc-label'), a = document.getElementById('onb-acc-amount'), c = document.getElementById('onb-acc-cur');
-    if(l) o.acc.label = l.value; if(a) o.acc.amount = a.value; if(c) o.acc.currency = c.value;
+    if(l) o.acc.label = l.value; if(a){ var cv = calcEval(a.value); o.acc.amount = (typeof cv==='number' && !isNaN(cv)) ? String(cv) : a.value; } if(c) o.acc.currency = c.value;
   }
   function boardIsEmpty(b){
     return !(b.subjects.length || b.events.length || b.income.length || b.expenses.length || b.balances.length || b.scheduleItems.length || b.subs.length || b.habits.length);
@@ -3049,6 +3651,7 @@ function lessoncalBoot(){
   function deleteExpense(id){
     var b = activeBoard();
     b.expenses = b.expenses.filter(function(x){ return x.id!==id; });
+    b.subs = b.subs.filter(function(x){ return !(x.financeLink && x.financeLink.boardId===b.id && x.financeLink.expenseId===id); });
     saveData();
   }
 
@@ -3397,6 +4000,7 @@ function lessoncalBoot(){
     var resetCards = (pendingAnim==='enter');
     var html = '';
     html += renderHeader();
+    html += '<div id="now-banner">'+nowBannerHtml()+'</div>';
     html += '<div class="layout' + (pendingAnim ? ' ' + pendingAnim : '') + '">';
     pendingAnim = '';
     html += renderSidebar();
@@ -3422,12 +4026,27 @@ function lessoncalBoot(){
     if(state.modal==='sub-pay') html += ov('sub-pay', renderSubPayModal());
     if(state.modal==='streak') html += ov('streak', renderStreakModal());
     if(state.modal==='onboarding') html += ov('onboarding', renderOnboarding());
-    if(state.modal==='admin' && isAdmin()) html += ov('admin', renderAdminModal());
+    if(state.modal==='admin') html += ov('admin', renderAdminModal());
+    if(state.modal==='presets') html += ov('presets', renderPresetsModal());
     if(state.pendingBackup) html += ov('backup', renderBackupDialog(), true);
     if(state.confirmDeleteId) html += ov('confirm-board', renderConfirmDeleteBoardModal(), true);
     if(state.renameBoardId) html += ov('rename-board', renderRenameBoardModal(), true);
     if(state.confirmCard) html += ov('confirm-card', renderConfirmDeleteCardModal(), true);
     app.innerHTML = html;
+    // кнопка «Назад» рядом с крестиком, если окно открыли из меню или из настроек
+    if(!state.modal) state.navStack = [];
+    if(state.navStack && state.navStack.length && state.modal){
+      var topOv = app.querySelector('.overlay[data-ov="'+state.modal+'"] .modal');
+      var cx = topOv && topOv.querySelector(':scope > .close-x');
+      if(cx){
+        var bb = document.createElement('button');
+        bb.type = 'button'; bb.className = 'back-x'; bb.setAttribute('data-act', 'modal-back');
+        bb.setAttribute('aria-label', T('Назад')); bb.title = T('Назад');
+        bb.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        topOv.insertBefore(bb, cx);
+        topOv.classList.add('has-back');
+      }
+    }
     // окна, которые были открыты и раньше, не анимируем повторно
     var newKeys = {};
     var newOverlays = app.querySelectorAll('.overlay[data-ov]');
@@ -3444,6 +4063,7 @@ function lessoncalBoot(){
       if(!newKeys[k]) ghostOut(oldOverlays[k], newOverlays.length>0);
     });
     document.documentElement.classList.toggle('modal-open', newOverlays.length>0);
+    enhanceCalcInputs(app);
     attachHandlers();
     updateNowHighlight();
     applySearch();
@@ -3451,9 +4071,53 @@ function lessoncalBoot(){
     var cardsEl = app.querySelector('.cards');
     if(cardsEl && !resetCards) cardsEl.scrollTop = savedCards;
     if(Math.abs(window.pageYOffset - savedWinY) > 1) window.scrollTo(0, savedWinY);
+    updateWeekVertical();
     updateTruncation();
     renderMiniBar();
+    syncHistory();
   }
+  // компьютер, режим «Неделя»: строка из 7 дней низкая, и под календарём остаётся пустота.
+  // Тогда дни встают списком сверху вниз и растягиваются на высоту колонки с карточками.
+  function updateWeekVertical(){
+    var L = app.querySelector('.layout');
+    var wrap = L && L.querySelector('.cal-wrap.week');
+    if(!wrap) return;
+    wrap.classList.remove('vertical');
+    wrap.style.removeProperty('--wk-row');
+    if(window.innerWidth<=820) return;
+    var sb = L.querySelector('.sidebar'), cc = L.querySelector('.cal-col');
+    if(!sb || !cc) return;
+    var cards = sb.querySelector('.cards');
+    var sideH = sb.offsetHeight + (cards ? cards.scrollHeight - cards.clientHeight : 0);
+    if(sideH - cc.offsetHeight < 200) return;
+    wrap.classList.add('vertical');
+    // добираем высоту строк, чтобы календарь доставал до низа колонки с карточками
+    var extra = sideH - cc.offsetHeight;
+    var cell = wrap.querySelector('.cal-cell');
+    if(extra > 0 && cell){
+      // строки подрастают, но не больше 84px — иначе неделя выходит слишком длинной
+      var h = Math.min(84, cell.offsetHeight + Math.floor(extra/7));
+      wrap.style.setProperty('--wk-row', h+'px');
+    }
+  }
+  document.addEventListener('click', function(ev){
+    var w = ev.target && ev.target.closest ? ev.target.closest('.more-wrap') : null;
+    var item = ev.target && ev.target.closest ? ev.target.closest('.more-menu button') : null;
+    app.querySelectorAll('.more-wrap.open').forEach(function(x){ if(x!==w || item) x.classList.remove('open'); });
+  }, true);
+  // телефон: список карточек прокручивается сам по себе, только когда целиком виден на экране.
+  // Иначе палец, попавший на карточки, листает страницу — и можно спокойно долистать вниз.
+  document.addEventListener('touchstart', function(ev){
+    var c = ev.target && ev.target.closest ? ev.target.closest('.cards') : null;
+    if(!c || window.innerWidth>820) return;
+    if(c.scrollHeight <= c.clientHeight + 1){ c.classList.remove('scroll-lock'); return; }
+    var r = c.getBoundingClientRect();
+    var vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    var fully = r.top >= -4 && r.bottom <= vh + 4;
+    c.classList.toggle('scroll-lock', !fully);
+  }, {passive: true});
+  var weekTimer = null;
+  window.addEventListener('resize', function(){ clearTimeout(weekTimer); weekTimer = setTimeout(updateWeekVertical, 150); });
 
   // при «Изменить» в балансе: прокрутить к форме и дважды мигнуть полями
   function focusBalanceForm(){
@@ -3469,7 +4133,8 @@ function lessoncalBoot(){
 
   // подсветка урока, который идёт прямо сейчас (таблица расписания)
   function updateNowHighlight(){
-    var nowDow = new Date().getDay();
+    updateNowBanner();
+    var nowDow = nowD().getDay();
     var hm = nowHM();
     document.querySelectorAll('.schedule-table tr[data-start]').forEach(function(tr){
       var st = tr.dataset.start, en = tr.dataset.end;
@@ -3529,9 +4194,12 @@ function lessoncalBoot(){
   function renderAddModal(){
     var ab = activeBoard();
     if(ab.type==='events') return renderAddEventModal();
-    if(ab.type==='finance') return state.financeView==='expenses' ? renderAddExpenseModal() : renderAddIncomeModal();
+    if(ab.type==='finance'){
+      if(state.editing && state.editing.kind==='sub') return renderAddSubModal();
+      if(state.financeView!=='expenses') return renderAddIncomeModal();
+      return (state.addKind==='sub' && !state.editing) ? renderAddSubModal() : renderAddExpenseModal();
+    }
     if(isSchedType(ab.type)) return renderAddScheduleItemModal();
-    if(ab.type==='subs') return renderAddSubModal();
     if(ab.type==='habits') return renderAddHabitModal();
     return renderAddSubjectModal();
   }
@@ -3540,7 +4208,6 @@ function lessoncalBoot(){
     if(ab.type==='events') return renderEventDayModal();
     if(ab.type==='finance') return renderFinanceDayModal();
     if(isSchedType(ab.type)) return renderScheduleDayModal();
-    if(ab.type==='subs') return renderSubsDayModal();
     if(ab.type==='habits') return renderHabitsDayModal();
     return renderLessonDayModal();
   }
@@ -3548,7 +4215,7 @@ function lessoncalBoot(){
   function renderHeader(){
     var vd = state.viewDate;
     var ab = activeBoard();
-    var typeLabel = {events:T('события'), finance:T('финансы'), schedule:T('расписание'), planner:T('задачи'), subs:T('подписки'), habits:T('привычки')}[ab.type] || T('занятия');
+    var typeLabel = {events:T('события'), finance:T('финансы'), schedule:T('расписание'), planner:T('задачи'), habits:T('привычки')}[ab.type] || T('занятия');
     var storageWarn = state.storageOk ? '' :
       T('<div class="storage-warn">Локальное хранилище браузера недоступно (например, приватный режим) — изменения не сохранятся.</div>');
     var financeToggle = '';
@@ -3580,7 +4247,7 @@ function lessoncalBoot(){
           '</div>'+
         '</div>'+
       '</header>'+
-      (FAKE_TODAY ? '<button type="button" class="fake-date-badge" data-act="open-admin">🧪 Тестовая дата: <b>'+fmtHuman(FAKE_TODAY)+'</b> · нажмите, чтобы изменить</button>' : '')+
+      (FAKE_OFFSET ? '<button type="button" class="fake-date-badge" data-act="open-admin">🧪 '+T('Тестовое время')+': <b>'+fmtHuman(fmt(todayD()))+', '+fmtTime(nowHM())+'</b> · '+T('нажмите, чтобы изменить')+'</button>' : '')+
       storageWarn;
   }
 
@@ -3589,7 +4256,6 @@ function lessoncalBoot(){
     if(ab.type==='events') return renderEventsSidebar(ab);
     if(ab.type==='finance') return state.financeView==='expenses' ? renderExpensesSidebar(ab) : renderIncomeSidebar(ab);
     if(isSchedType(ab.type)) return renderScheduleSidebar(ab);
-    if(ab.type==='subs') return renderSubsSidebar(ab);
     if(ab.type==='habits') return renderHabitsSidebar(ab);
     return renderLessonsSidebar(ab);
   }
@@ -3791,6 +4457,12 @@ function lessoncalBoot(){
           '<button type="button" class="bl-plus" data-act="balance-op" data-id="'+x.id+'" title="'+T('Пополнить или перевести')+'" aria-label="'+T('Пополнить или перевести')+'">+</button>'+
         '</div>';
       }).join('');
+    } else if(!ab.balances.length){
+      // балансов нет — компактная строка: вести их необязательно
+      return '<div class="balance-optional">'+
+        '<div><b>'+T('Баланс')+'</b><span>'+T('Вести баланс не обязательно — всё работает и без него.')+'</span></div>'+
+        '<button type="button" class="btn small" data-act="open-balance">+ '+T('Добавить')+'</button>'+
+      '</div>';
     } else {
       body = T('Добавить баланс');
     }
@@ -3869,13 +4541,31 @@ function lessoncalBoot(){
   }
 
   function renderExpensesSidebar(ab){
-    var html = '<div class="sidebar">'+renderIncomePrompts(ab)+renderBalanceWidget(ab)+T('<h2>Расходы</h2>')+renderSearchBox()+'<div class="cards">';
-    if(ab.expenses.length===0){
+    var flt = state.expFilter || 'all';
+    if(flt==='subs' && !ab.subs.length && !state.search) flt = 'subs';
+    var filterHtml = '<div class="exp-filter"><select data-act="set-exp-filter" aria-label="'+escapeHtml(T('Фильтр расходов'))+'">'+
+      [['all', T('Все расходы')], ['regular', T('Обычные расходы')], ['subs', '🔁 '+T('Подписки')+(ab.subs.length ? ' ('+ab.subs.length+')' : '')]].map(function(o){
+        return '<option value="'+o[0]+'"'+(o[0]===flt?' selected':'')+'>'+o[1]+'</option>';
+      }).join('')+'</select></div>';
+    var html = '<div class="sidebar">'+renderIncomePrompts(ab)+renderBalanceWidget(ab)+T('<h2>Расходы</h2>')+renderSearchBox()+filterHtml;
+    if(flt==='subs'){
+      html += (ab.subs.length ? renderSubsStats(ab) : '')+'<div class="cards">';
+      if(!ab.subs.length){
+        html += '<div class="empty" style="padding:20px 6px;"><div class="display">'+T('Пока пусто')+'</div>'+T('Добавьте Netflix, Spotify, iCloud — приложение напомнит о списании и запишет его в расходы.')+'</div>';
+      }
+      sortedSubs(ab).forEach(function(x){ html += subCardHtml(x); });
+      html += '</div><button class="add-card" data-act="open-add" data-kind="sub">+ '+T('Добавить подписку')+'</button></div>';
+      return html;
+    }
+    html += '<div class="cards">';
+    var list = ab.expenses.filter(function(e){ return flt!=='regular' || !subOfExpense(ab, e); });
+    if(list.length===0){
       html += T('<div class="empty" style="padding:20px 6px;"><div class="display">Пока пусто</div>Добавьте статьи расходов, чтобы увидеть их на колесе.</div>');
     }
     var totalsByCur = {};
     ab.expenses.forEach(function(e){ totalsByCur[e.currency] = (totalsByCur[e.currency]||0) + e.amount; });
-    ab.expenses.forEach(function(exp){
+    list.forEach(function(exp){
+      var linkedSub = subOfExpense(ab, exp);
       var color = COLORS[exp.color] || COLORS.amber;
       var curTotal = totalsByCur[exp.currency] || 0;
       var pct = curTotal>0 ? Math.round(exp.amount/curTotal*100) : 0;
@@ -3886,12 +4576,14 @@ function lessoncalBoot(){
             '<div class="pc-name"><span class="dot" style="background:'+color+'"></span><span class="txt" title="'+escapeHtml(exp.name)+'">'+escapeHtml(exp.name)+'</span></div>'+
             '<div style="display:flex;gap:4px;">'+
               '<button class="icon-btn" data-act="add-transaction" data-kind="expense" data-id="'+exp.id+T('" title="Добавить сумму" style="width:26px;height:26px;font-size:14px;">+</button>')+
-              '<button class="icon-btn" data-act="edit-expense" data-id="'+exp.id+T('" title="Изменить" style="width:26px;height:26px;font-size:12px;">✎</button>')+
+              (linkedSub ? '<button class="icon-btn" data-act="edit-sub" data-id="'+linkedSub.id+'" title="'+T('Изменить')+'" style="width:26px;height:26px;font-size:12px;">✎</button>'
+                : '<button class="icon-btn" data-act="edit-expense" data-id="'+exp.id+T('" title="Изменить" style="width:26px;height:26px;font-size:12px;">✎</button>'))+
               '<button class="icon-btn" data-act="delete-expense" data-id="'+exp.id+T('" title="Удалить" style="width:26px;height:26px;font-size:13px;">✕</button>')+
             '</div>'+
           '</div>'+
           '<div class="pc-body">'+
             '<div class="pc-stats"><b>'+fmtMoney(exp.amount, exp.currency)+'</b><br>'+pct+T('% от расходов в ')+(CURRENCIES[exp.currency]||exp.currency)+'</div>'+
+            (linkedSub ? '<div class="sub-line"><span class="tag">🔁 '+T('Подписка')+'</span> '+fmtMoney(linkedSub.amount, linkedSub.currency)+' '+subPeriodLabel(linkedSub.period)+'<br>'+subStatusLine(linkedSub)+'</div>' : '')+
             renderRecurringLine(exp)+
             renderBudgetBlock(exp)+
             renderSubsBlock(exp)+
@@ -3906,7 +4598,7 @@ function lessoncalBoot(){
 
   function renderCalendar(){
     var ab = activeBoard();
-    var compact = (ab.type==='finance') || isSchedType(ab.type) || ab.type==='subs' || ab.type==='habits';
+    var compact = (ab.type==='finance') || isSchedType(ab.type) || ab.type==='habits';
     var html = '<div class="cal-col">';
     html += renderCalendarGrid(compact);
     if(ab.type==='finance'){
@@ -3915,12 +4607,40 @@ function lessoncalBoot(){
     }
     if(ab.type==='schedule') html += renderScheduleTable(ab);
     if(ab.type==='planner') html += renderPlannerTable(ab);
-    if(ab.type==='subs') html += renderSubsPanel(ab);
     if(ab.type==='habits') html += renderHabitsPanel(ab);
     html += '</div>';
     return html;
   }
 
+  // сколько потрачено за период: всё переводим в валюту итогов доски; без курса — отдельной суммой
+  function periodSpentText(ab, from, to){
+    var r = periodSpent(ab, from, to);
+    var out = fmtMoney2(r.total, r.disp);
+    Object.keys(r.other).forEach(function(c){ out += ' + '+fmtMoney2(r.other[c], c); });
+    return out;
+  }
+  function periodSpent(ab, from, to){
+    var disp = boardDisplayCurrency(ab), total = 0, other = {};
+    ab.expenses.forEach(function(exp){
+      (exp.history||[]).forEach(function(h){
+        if(!h.date || h.date<from || h.date>to) return;
+        var a = Number(h.amount) || 0;
+        if(exp.currency===disp){ total += a; return; }
+        var r = getRate(ab, exp.currency, disp);
+        if(r!==null) total += a*r; else other[exp.currency] = (other[exp.currency]||0) + a;
+      });
+    });
+    return {total: total, other: other, disp: disp};
+  }
+  // «↑ 12%» / «↓ 8%» к прошлой неделе или месяцу
+  function spentCompareHtml(ab, cur, pFrom, pTo, isWeek){
+    var prev = periodSpent(ab, pFrom, pTo).total;
+    if(!(prev>0) || privOn()) return '';
+    var diff = Math.round((cur - prev) / prev * 100);
+    var label = isWeek ? T('к прошлой неделе') : T('к прошлому месяцу');
+    if(diff===0) return '<span class="cmp same" title="'+escapeHtml(label)+'">= '+label+'</span>';
+    return '<span class="cmp '+(diff>0?'up':'down')+'" title="'+escapeHtml(label)+'">'+(diff>0?'↑':'↓')+' '+Math.abs(diff)+'% '+label+'</span>';
+  }
   function renderCalendarGrid(compact){
     var vd = state.viewDate;
     var ab = activeBoard();
@@ -3934,7 +4654,17 @@ function lessoncalBoot(){
     if(isWeek) gridStart = parseD(curWeekStart());
 
     var dowRow = '<div class="cal-dow">'+DOW_LABELS.map(function(l){ return '<div>'+l+'</div>'; }).join('')+'</div>';
-    var viewSwitch = '<div class="cal-top"><div class="segmented" role="tablist">'+
+    var spentHtml = '';
+    if(ab.type==='finance' && state.financeView==='expenses'){
+      var pf = isWeek ? gridStart : new Date(y, m, 1);
+      var pt = isWeek ? addDays(gridStart, 6) : new Date(y, m+1, 0);
+      var ppf = isWeek ? addDays(gridStart, -7) : new Date(y, m-1, 1);
+      var ppt = isWeek ? addDays(gridStart, -1) : new Date(y, m, 0);
+      var curSp = periodSpent(ab, fmt(pf), fmt(pt));
+      spentHtml = '<div class="cal-spent"><span>'+(isWeek ? T('Потрачено за неделю') : T('Потрачено за месяц'))+'</span><b>'+periodSpentText(ab, fmt(pf), fmt(pt))+'</b>'+
+        spentCompareHtml(ab, curSp.total, fmt(ppf), fmt(ppt), isWeek)+'</div>';
+    }
+    var viewSwitch = '<div class="cal-top'+(spentHtml ? ' has-spent' : '')+'">'+spentHtml+'<div class="segmented" role="tablist">'+
       '<button class="seg-btn'+(isWeek?' active':'')+'" data-act="cal-view" data-view="week">'+T('Неделя')+'</button>'+
       '<button class="seg-btn'+(isWeek?'':' active')+'" data-act="cal-view" data-view="month">'+T('Месяц')+'</button>'+
     '</div></div>';
@@ -3991,8 +4721,7 @@ function lessoncalBoot(){
           var tt = exp.name+' · -'+fmtMoney(histEntry.amount, exp.currency);
           markers += '<span class="'+cls+'" title="'+escapeHtml(tt)+'" style="--mc:'+color+'"></span>';
         });
-      } else if(ab.type==='subs'){
-        markers += subMarkersFor(ab, ds, todayStr);
+        markers += subMarkersFor(ab, ds, todayStr, true);
       } else if(ab.type==='habits'){
         markers += habitMarkersFor(ab, ds, todayStr);
       } else if(isSchedType(ab.type)){
@@ -4039,6 +4768,17 @@ function lessoncalBoot(){
     return '<div class="cal-wrap'+(compact?' compact':'')+(isWeek?' week':'')+'">'+viewSwitch+dowRow+'<div class="cal-grid">'+cells+'</div></div>';
   }
 
+  // «⋯» под колесом: курсы и история спрятаны в одно меню
+  function wheelMoreMenu(display, withHistory){
+    return '<div class="more-wrap">'+
+      '<button type="button" class="btn small more-dots" data-act="toggle-more" aria-haspopup="true" aria-label="'+escapeHtml(T('Ещё'))+'" title="'+escapeHtml(T('Ещё'))+'">⋯</button>'+
+      '<div class="more-menu" role="menu">'+
+        '<button type="button" role="menuitem" data-act="refresh-rates" data-to="'+display+'">↻ '+T('Обновить курсы')+'</button>'+
+        '<button type="button" role="menuitem" data-act="open-rates">💱 '+T('Курсы валют')+'</button>'+
+        (withHistory ? '<button type="button" role="menuitem" data-act="open-history">🧾 '+T('История транзакций')+'</button>' : '')+
+      '</div>'+
+    '</div>';
+  }
   function renderExpenseWheel(ab){
     var curs = currenciesUsed(ab.expenses);
     var display = (ab.wheelCurrency && CURRENCY_KEYS.indexOf(ab.wheelCurrency)!==-1) ? ab.wheelCurrency : (curs[0] || DEFAULT_CURRENCY);
@@ -4046,11 +4786,9 @@ function lessoncalBoot(){
       '<div class="wheel-controls">'+
         T('<label class="mono">Колесо в:</label>')+
         '<select data-act="set-wheel-currency">'+
-          CURRENCY_KEYS.map(function(c){ return '<option value="'+c+'"'+(c===display?' selected':'')+'>'+c+' ('+CURRENCIES[c]+')</option>'; }).join('')+
+          currencyOptionsHtml(display)+
         '</select>'+
-        '<button type="button" class="btn small" data-act="refresh-rates" data-to="'+display+T('">Обновить курсы</button>')+
-        T('<button type="button" class="btn small" data-act="open-rates">Курсы валют</button>')+
-        T('<button type="button" class="btn small" data-act="open-history">История транзакций</button>')+
+        wheelMoreMenu(display, true)+
       '</div>';
     if(ab.expenses.length===0){
       return controlsHtml + T('<div class="empty" style="padding:24px 10px;"><div class="display">Колесо пусто</div>Добавьте расходы слева, чтобы увидеть распределение.</div>');
@@ -4131,14 +4869,11 @@ function lessoncalBoot(){
       '<div class="wheel-controls">'+
         T('<label class="mono">Колесо в:</label>')+
         '<select data-act="set-wheel-currency">'+
-          CURRENCY_KEYS.map(function(c){ return '<option value="'+c+'"'+(c===display?' selected':'')+'>'+c+' ('+CURRENCIES[c]+')</option>'; }).join('')+
+          currencyOptionsHtml(display)+
         '</select>'+
-        '<button type="button" class="btn small" data-act="refresh-rates" data-to="'+display+T('">Обновить курсы</button>')+
-        T('<button type="button" class="btn small" data-act="open-rates">Курсы валют</button>')+
+        wheelMoreMenu(display, false)+
       '</div>';
-    if(ab.balances.length===0){
-      return controlsHtml + T('<div class="empty" style="padding:24px 10px;"><div class="display">Балансов пока нет</div>Добавьте их через виджет «Баланс» слева.</div>');
-    }
+    if(ab.balances.length===0) return '';
     var missing = [];
     var items = ab.balances.map(function(x, idx){
       var rate = getRate(ab, x.currency, display);
@@ -4206,6 +4941,26 @@ function lessoncalBoot(){
     });
     return rows;
   }
+  // ---------- «Перенести невыполненное на завтра» (планер) ----------
+  function plannerMovable(ab, ds){
+    if(ds > fmt(todayD())) return [];
+    return scheduleRowsFor(ab, ds).filter(function(r){ return !isDoneOn(r.t, ds) && (r.t.movedOn||[]).indexOf(ds)===-1; });
+  }
+  function moveUnfinishedToTomorrow(ds){
+    var ab = activeBoard();
+    var list = plannerMovable(ab, ds);
+    if(!list.length) return;
+    var tm = fmt(addDays(todayD(), 1)), tmDay = parseD(tm).getDay();
+    withUndo(T('Перенесено на завтра')+': '+list.length, function(){
+      list.forEach(function(r){
+        if(r.t.date){ r.t.date = tm; r.t.day = tmDay; return; }
+        // повторяющаяся задача: на завтра появляется разовая копия, а здесь остаётся пометка
+        r.t.movedOn = (r.t.movedOn||[]).concat([ds]);
+        r.item.times.push({id: uid(), day: tmDay, date: tm, timeStart: r.t.timeStart, timeEnd: r.t.timeEnd, doneWeeks: [], fromDate: ds});
+      });
+      saveData();
+    });
+  }
   function selectedDayLabel(ds){
     var d = parseD(ds);
     return DOW_FULL[d.getDay()].charAt(0).toUpperCase()+DOW_FULL[d.getDay()].slice(1)+', '+fmtHumanNoYear(ds)+(ds===fmt(todayD()) ? T(' · сегодня') : '');
@@ -4223,8 +4978,8 @@ function lessoncalBoot(){
           var it = r.item, t = r.t;
           var color = COLORS[it.color] || COLORS.amber;
           return '<tr data-day="'+t.day+'" data-start="'+(t.timeStart||'')+'" data-end="'+(t.timeEnd||'')+'">'+
-            '<td class="mono tm">'+(t.timeStart||'—')+'</td>'+
-            '<td class="mono tm">'+(t.timeEnd||'—')+'</td>'+
+            '<td class="mono tm">'+(fmtTime(t.timeStart)||'—')+'</td>'+
+            '<td class="mono tm">'+(fmtTime(t.timeEnd)||'—')+'</td>'+
             taskCellHtml(it, t, color, false, ds)+
           '</tr>';
         }).join('')+
@@ -4250,10 +5005,10 @@ function lessoncalBoot(){
       var it = r.item, t = r.t;
       var dn = isDoneOn(t, ds);
       var color = COLORS[it.color] || COLORS.amber;
-      return '<tr class="task-row'+(dn?' is-done':'')+'" data-day="'+t.day+'" data-start="'+(t.timeStart||'')+'" data-end="'+(t.timeEnd||'')+'">'+
+      return '<tr class="task-row'+(dn?' is-done':'')+((t.movedOn||[]).indexOf(ds)!==-1?' is-moved':'')+'" data-day="'+t.day+'" data-start="'+(t.timeStart||'')+'" data-end="'+(t.timeEnd||'')+'">'+
         '<td class="chk"><input type="checkbox" class="task-check" data-act="toggle-done" data-item="'+it.id+'" data-time="'+t.id+'" data-date="'+ds+'"'+(dn?' checked':'')+'></td>'+
-        '<td class="mono tm">'+(t.timeStart||'—')+'</td>'+
-        '<td class="mono tm">'+(t.timeEnd||'—')+'</td>'+
+        '<td class="mono tm">'+(fmtTime(t.timeStart)||'—')+'</td>'+
+        '<td class="mono tm">'+(fmtTime(t.timeEnd)||'—')+'</td>'+
         taskCellHtml(it, t, color, dn, ds)+
       '</tr>';
     }
@@ -4266,7 +5021,9 @@ function lessoncalBoot(){
       bodyHtml = T('<div class="empty" style="padding:24px 10px;"><div class="display">Пусто</div>На этот день пока нет задач.</div>');
     } else {
       var pct = Math.round(done.length/rows.length*100);
+      var movable = plannerMovable(ab, ds);
       bodyHtml = '<div class="progress-line"><div class="budget-bar"><i style="width:'+pct+'%"></i></div><span>'+done.length+T(' из ')+rows.length+'</span></div>'+
+        (movable.length ? '<button type="button" class="btn small move-tomorrow" data-act="move-tomorrow" data-date="'+ds+'">↪ '+T('Перенести невыполненное на завтра')+' ('+movable.length+')</button>' : '')+
         T('<table class="schedule-table"><thead><tr><th></th><th>Начало</th><th>Конец</th><th>Задача</th></tr></thead><tbody>')+
         section(T('Не выполнено'), pending)+section(T('Выполнено'), done)+
       '</tbody></table>';
@@ -4440,9 +5197,20 @@ function lessoncalBoot(){
     '</div>';
   }
 
+  // порядок в списках валют: валюта по умолчанию, затем уже используемые, затем остальные
+  function currencyOrder(){
+    var out = [DEFAULT_CURRENCY], add = function(c){ if(c && CURRENCIES[c] && out.indexOf(c)===-1) out.push(c); };
+    state.boards.forEach(function(b){
+      ['balances','expenses','income','subs'].forEach(function(k){ (b[k]||[]).forEach(function(x){ add(x.currency); }); });
+    });
+    // в списках показываем только самые ходовые валюты; редкие видны, только если уже используются
+    SHOWN_CURRENCIES.forEach(add);
+    return out;
+  }
+  function currencyLabel(c){ return CURRENCIES[c]===c ? c : c+' ('+CURRENCIES[c]+')'; }
   function currencyOptionsHtml(selected){
-    return CURRENCY_KEYS.map(function(c){
-      return '<option value="'+c+'"'+(c===selected?' selected':'')+'>'+c+' ('+CURRENCIES[c]+')</option>';
+    return currencyOrder().map(function(c){
+      return '<option value="'+c+'"'+(c===selected?' selected':'')+'>'+currencyLabel(c)+'</option>';
     }).join('');
   }
 
@@ -4497,6 +5265,13 @@ function lessoncalBoot(){
     '</div>';
   }
 
+  // переключатель типа нового расхода: обычный или подписка
+  function addKindToggle(cur){
+    return '<div class="toggle-row add-kind">'+
+      '<button type="button" class="toggle-btn'+(cur==='expense'?' active':'')+'" data-act="add-kind" data-kind="expense">'+T('Обычный расход')+'</button>'+
+      '<button type="button" class="toggle-btn'+(cur==='sub'?' active':'')+'" data-act="add-kind" data-kind="sub">🔁 '+T('Подписка')+'</button>'+
+    '</div>';
+  }
   function renderAddExpenseModal(){
     var editing = (state.editing && state.editing.kind==='expense') ? activeBoard().expenses.find(function(x){ return x.id===state.editing.id; }) : null;
     return ''+
@@ -4504,6 +5279,7 @@ function lessoncalBoot(){
       '<div class="modal" data-stop="1">'+
         '<button class="close-x" data-act="close-modal">✕</button>'+
         '<h3 class="display">'+(editing?T('Изменить расход'):T('Новый расход'))+'</h3>'+
+        (editing ? '' : addKindToggle('expense'))+
         T('<div class="sub">Появится как доля на колесе расходов</div>')+
         '<form id="add-expense-form">'+
           (editing?'<input type="hidden" name="editId" value="'+editing.id+'">':'')+
@@ -4633,7 +5409,7 @@ function lessoncalBoot(){
   function taskCellHtml(it, t, color, strike, ds){
     return '<td class="desc"><div class="task-cell">'+
       '<div class="task-main'+(strike?' task-done':'')+'">'+
-        '<div class="task-name"><span class="dot" style="background:'+color+';display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;"></span>'+escapeHtml(it.name)+(t.date ? T(' <span class="tag">разово</span>') : '')+'</div>'+
+        '<div class="task-name"><span class="dot" style="background:'+color+';display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;"></span>'+escapeHtml(it.name)+(t.date ? T(' <span class="tag">разово</span>') : '')+(ds && (t.movedOn||[]).indexOf(ds)!==-1 ? ' <span class="tag moved">↪ '+T('на завтра')+'</span>' : '')+'</div>'+
         (it.notes ? '<div class="task-notes dim">'+escapeHtml(it.notes)+'</div>' : '')+
       '</div>'+
       '<button type="button" class="more-btn" data-act="show-task" data-item="'+it.id+'" data-time="'+t.id+'" data-date="'+(ds||'')+T('" title="Подробнее">…</button>')+
@@ -4776,6 +5552,8 @@ function lessoncalBoot(){
         items += '<div class="day-item">'+head+body+'</div>';
       });
     });
+    var subItems = subDayItems(ab, ds, true);
+    if(subItems){ any = true; items += subItems; }
     if(!any){
       items = T('<div class="empty" style="padding:20px 6px;">На этот день ничего не запланировано.</div>');
     }
@@ -4821,6 +5599,7 @@ function lessoncalBoot(){
         '<button class="close-x" data-act="close-modal">✕</button>'+
         T('<h3 class="display">Баланс</h3>')+
         '<div class="sub">'+T('Основные счета видны на главном экране, с них списываются траты из быстрого ввода. Второстепенные — наличные в заначке, копилка и т.д.')+'</div>'+
+        '<div class="field-hint" style="margin:-4px 0 12px;">ℹ️ '+T('Вести баланс не обязательно — всё работает и без него.')+'</div>'+
         '<div class="section-title">'+T('Основные балансы')+' <span class="dim">· '+mainCount+'</span></div>'+
         mainRows+
         T('<div class="section-title">Второстепенные балансы</div>')+
@@ -4909,9 +5688,7 @@ function lessoncalBoot(){
   }
 
   function accountSelectHtml(ab, currency, emptyHint){
-    if(!ab.balances.length){
-      return '<div class="field-hint" style="margin-bottom:14px;">'+emptyHint+'</div>';
-    }
+    if(!ab.balances.length) return '';
     return T('<div class="field"><label>Счёт</label><select name="balanceId">')+balanceOptionsHtml(ab, currency, null)+'</select></div>';
   }
 
@@ -5001,7 +5778,7 @@ function lessoncalBoot(){
     var selId = rc.balanceId ? rc.balanceId : (Object.keys(rc.confirmed).length ? '' : null);
     var acc = ab.balances.length
       ? '<div class="field"><label>'+T('Списать со счёта')+'</label><select name="balanceId">'+balanceOptionsHtml(ab, exp.currency, selId, T('Не списывать со счёта'))+'</select></div>'
-      : '<div class="field-hint" style="margin-bottom:14px;">'+T('Нет счёта в этой валюте — платёж отметится, но баланс не изменится.')+'</div>';
+      : '';
     return '<div class="overlay"><div class="modal narrow" data-stop="1">'+
       '<button class="close-x" data-act="close-modal">✕</button>'+
       '<h3 class="display">'+T('Оплата')+' «'+escapeHtml(exp.name)+'»</h3>'+
@@ -5085,7 +5862,7 @@ function lessoncalBoot(){
   }
   function renderIncomePrompts(ab){
     var rows = incomePromptRows(ab);
-    var exp = renderExpensePrompts(ab);
+    var exp = renderExpensePrompts(ab) + renderSubsNotice(ab);
     if(!rows.length) return exp;
     return T('<div class="notice"><div class="notice-title">Подтвердите поступление</div>')+rows.map(function(r){ return renderIncomePromptRow(r); }).join('')+'</div>'+exp;
   }
@@ -5191,7 +5968,7 @@ function lessoncalBoot(){
       (item.history||[]).slice().reverse().some(function(h){ if(h.balanceId){ lastBal = h.balanceId; return true; } return false; });
       accountField = T('<div class="field"><label>Счёт</label><select name="balanceId">')+balanceOptionsHtml(ab, item.currency, lastBal)+'</select></div>';
     } else {
-      accountField = T('<div class="field-hint" style="margin-bottom:14px;">Нет счёта в валюте ')+item.currency+T(' — сумма добавится к карточке, но баланс не изменится. Можно добавить счёт через «Баланс» в меню.</div>');
+      accountField = '';
     }
     return ''+
     '<div class="overlay">'+
@@ -5240,6 +6017,12 @@ function lessoncalBoot(){
         '<button class="close-x" data-act="close-modal">✕</button>'+
         T('<h3 class="display">Курсы валют</h3>')+
         T('<div class="sub">Сохранённые курсы конвертации для колеса расходов</div>')+
+        '<div class="rates-auto">'+
+          '<div class="rates-auto-text">'+T('Курсы подтягиваются автоматически при каждом запуске приложения.')+
+            (ab.ratesAt ? '<br><span class="dim">'+T('Последнее обновление')+': '+escapeHtml(new Date(ab.ratesAt).toLocaleString(LOCALE, {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}))+'</span>' : '')+
+          '</div>'+
+          '<button type="button" class="btn small" data-act="refresh-rates">'+T('Обновить сейчас')+'</button>'+
+        '</div>'+
         rows+
         '<div class="drawer-hr"></div>'+
         '<form id="rate-form">'+
@@ -5453,10 +6236,12 @@ function lessoncalBoot(){
           row(T('Тема'), seg([['dark', T('Тёмная')], ['light', T('Светлая')], ['auto', T('Как в системе')]], th, 'set-theme', 'theme'))+
           row(T('Язык'),
             '<select id="lang-select">'+
-              [['auto', T('Как в системе')], ['ru','Русский'], ['uk','Українська'], ['en','English']].map(function(o){
+              [['auto', T('Как в системе')+' ('+LANG_NAMES[detectSystemLang()]+')']].concat(LANGS.map(function(c){ return [c, LANG_NAMES[c]]; })).map(function(o){
                 return '<option value="'+o[0]+'"'+(LANG_PREF===o[0]?' selected':'')+'>'+o[1]+'</option>';
               }).join('')+
             '</select>', T('После смены языка страница перезагрузится.'))+
+          row(T('Формат времени'), seg([['24', T('24 часа')], ['12', T('12 часов (AM/PM)')]], TIME12 ? '12' : '24', 'set-time12', 't12'))+
+          row(T('Валюта по умолчанию'), '<select id="currency-select">'+currencyOptionsHtml(DEFAULT_CURRENCY)+'</select>', T('Подставляется в новые счета, траты, доходы и подписки.'))+
           row(T('Анимации'), seg([['full', T('Все')], ['lite', T('Упрощённые')], ['off', T('Выключены')]], animMode(), 'set-anim', 'anim'),
             T('«Упрощённые» убирают размытие фона и анимации появления — меньше нагрузки на слабых телефонах. «Выключены» — всё меняется мгновенно.'))
         )+
@@ -5468,6 +6253,9 @@ function lessoncalBoot(){
             '<input type="checkbox" class="switch" id="summary-start"'+(getSummaryOnStart()?' checked':'')+'></label>'
         )+
 
+        group(T('Быстрый ввод'),
+          '<button type="button" class="set-btn" data-act="open-presets"><span class="set-ico">⚡</span><span>'+T('Частые траты')+'<small>'+T('Кнопки в быстром вводе: одно нажатие — и трата записана в нужную категорию.')+'</small></span></button>'
+        )+
         group(T('Данные'),
           '<button type="button" class="set-btn" data-act="download-backup"><span class="set-ico">⬇</span><span>'+T('Скачать копию всех досок')+'<small>'+T('Если браузер очистит данные, из этого файла можно всё восстановить.')+'</small></span></button>'+
           '<button type="button" class="set-btn" data-act="download-board"><span class="set-ico">↗</span><span>'+T('Поделиться текущей доской')+'<small>'+T('Файл можно отправить в мессенджере или по почте.')+'</small></span></button>'+
@@ -5478,10 +6266,12 @@ function lessoncalBoot(){
         )+
 
         group(T('О приложении'),
-          '<button type="button" class="set-btn" data-act="show-onboarding"><span class="set-ico">👋</span><span>'+T('Показать приветствие')+'<small>'+T('Ещё раз пройти первый запуск и добавить доски.')+'</small></span></button>'+
-          (isAdmin() ? '<button type="button" class="set-btn" data-act="open-admin"><span class="set-ico">🛠</span><span>Админ-панель<small>Тестовая дата, огонёк, шаблоны</small></span></button>' : '')
+          '<button type="button" class="set-btn" data-act="show-onboarding"><span class="set-ico">👋</span><span>'+T('Показать приветствие')+'<small>'+T('Ещё раз пройти первый запуск и добавить доски.')+'</small></span></button>'
         )+
-        '<div class="app-version" data-act="version-tap">'+T('Версия')+' '+APP_VERSION+' · '+T('бета')+'</div>'+
+        group(T('Экспериментальные настройки'),
+          '<button type="button" class="set-btn" data-act="open-experimental"><span class="set-ico">🧪</span><span>'+T('Экспериментальные настройки')+'<small>'+T('Тестовая дата и шаблоны досок для проверки')+'</small></span></button>'
+        )+
+        '<div class="app-version">'+T('Версия')+' '+APP_VERSION+' · '+T('бета')+'</div>'+
       '</div>'+
     '</div>';
   }
@@ -5520,6 +6310,9 @@ function lessoncalBoot(){
           T('<option value="">Не списывать со счёта</option>');
         bals = bals.concat(others.filter(function(x){ return x.rates && x.rates[cur]; }));
         aSel.value = bals.some(function(x){ return x.id===prevA; }) ? prevA : (prevA==='' && link.boardId===bd.id && link.balanceId==='' ? '' : (bals[0] ? bals[0].id : ''));
+        // баланс не ведётся — поле «Списать со счёта» не показываем
+        var aField = aSel.closest('.field');
+        if(aField) aField.style.display = bd.balances.length ? '' : 'none';
     };
     form.querySelector('select[name=finBoard]').addEventListener('change', function(){
       form.querySelector('select[name=finExpense]').value = '';
@@ -5529,6 +6322,27 @@ function lessoncalBoot(){
     var curEl = form.querySelector('[name=currency]');
     if(curEl && curEl.tagName==='SELECT') curEl.addEventListener('change', rebuildFin);
     rebuildFin();
+    // краткая сводка в заголовке свёрнутого блока
+    var head = finBox.querySelector('.fin-head'), sumEl = finBox.querySelector('.fin-sum');
+    var updSum = function(){
+      if(!sumEl) return;
+      var bSel = form.querySelector('select[name=finBoard]'), eSel = form.querySelector('select[name=finExpense]'), aSel = form.querySelector('select[name=finBalance]');
+      if(!bSel.value){ sumEl.textContent = T('Не записывать'); finBox.classList.add('off'); return; }
+      finBox.classList.remove('off');
+      var eo = eSel.options[eSel.selectedIndex], ao = aSel.options[aSel.selectedIndex];
+      var en = eSel.value==='new' ? (finInfo.subjName || T('новая категория')) : (eo ? eo.textContent : '');
+      var bdx = finInfo.boards.find(function(b){ return b.id===bSel.value; });
+      var an = (bdx && !bdx.balances.length) ? '' : (aSel.value ? (ao ? ao.textContent.split(' · ')[0] : '') : T('без списания'));
+      sumEl.textContent = en + (an ? ' · ' + an : '');
+    };
+    finBox.addEventListener('change', updSum);
+    if(curEl) curEl.addEventListener('change', function(){ setTimeout(updSum, 0); });
+    updSum();
+    if(head) head.addEventListener('click', function(){
+      var open = !finBox.classList.contains('open');
+      finBox.classList.toggle('open', open);
+      head.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
   }
   function finFromForm(fd){
     return fd.get('finBoard') ? {boardId: fd.get('finBoard'), expenseId: fd.get('finExpense') || 'new', balanceId: fd.get('finBalance') || ''} : null;
@@ -6060,13 +6874,6 @@ function lessoncalBoot(){
     }
 
     wireStreakSwipe();
-    var admFree = document.getElementById('adm-streak-free');
-    if(admFree){
-      admFree.addEventListener('change', function(){
-        try{ localStorage.setItem(STREAK_FREE_KEY, admFree.checked ? '1' : '0'); }catch(e){}
-        showToast(admFree.checked ? 'Свободный режим огонька включён' : 'Свободный режим выключен');
-      });
-    }
 
     var balanceOpForm = document.getElementById('balance-op-form');
     if(balanceOpForm){
@@ -6122,6 +6929,14 @@ function lessoncalBoot(){
       });
     }
 
+    var curSelect = document.getElementById('currency-select');
+    if(curSelect){
+      curSelect.addEventListener('change', function(){
+        DEFAULT_CURRENCY = curSelect.value;
+        try{ localStorage.setItem(CURRENCY_KEY, DEFAULT_CURRENCY); }catch(e){}
+        showToast(T('Валюта по умолчанию')+': '+currencyLabel(DEFAULT_CURRENCY));
+      });
+    }
     var langSelect = document.getElementById('lang-select');
     if(langSelect){
       langSelect.addEventListener('change', function(){
@@ -6163,6 +6978,7 @@ function lessoncalBoot(){
       }, {passive: true});
     }
 
+    wirePresetForm();
     var rateForm = document.getElementById('rate-form');
     if(rateForm){
       rateForm.addEventListener('submit', function(ev){
@@ -6237,6 +7053,7 @@ function lessoncalBoot(){
     span.textContent = msg;
     t.appendChild(span);
     t.classList.toggle('has-action', !!opts.action);
+    t.classList.toggle('long', String(msg).length > 70);
     if(opts.action){
       var btn = document.createElement('button');
       btn.type = 'button';
@@ -6392,6 +7209,34 @@ function lessoncalBoot(){
     render();
   }
   function anyDialog(){ return !!(state.confirmDeleteId || state.renameBoardId || state.confirmCard || state.pendingBackup); }
+
+  // ---------- кнопка «Назад» на Android / жест назад: закрывает окно, а не приложение ----------
+  // Пока открыто любое окно, в истории браузера лежит одна «пустая» запись. Назад снимает её — и мы закрываем верхнее окно.
+  var histGuard = false, histIgnore = 0;
+  function anyLayerOpen(){ return !!(state.modal || state.menuOpen || anyDialog() || (typeof quick!=='undefined' && quick.open)); }
+  function syncHistory(){
+    try{
+      var open = anyLayerOpen();
+      if(open && !histGuard){ history.pushState({lcLayer: 1}, ''); histGuard = true; }
+      else if(!open && histGuard){ histGuard = false; histIgnore++; history.back(); }
+    }catch(e){}
+  }
+  function closeTopLayer(){
+    if(quick.open){ closeQuick(); return; }
+    if(anyDialog()){ closeDialogs(); return; }
+    if(state.modal && state.navStack && state.navStack.length){
+      var bb = app.querySelector('.back-x');
+      if(bb){ handleAction(bb, {stopPropagation: function(){}, preventDefault: function(){}}); return; }
+    }
+    if(state.modal || state.menuOpen) closeTopModal();
+  }
+  window.addEventListener('popstate', function(){
+    if(histIgnore > 0){ histIgnore--; return; }
+    histGuard = false;
+    if(anyLayerOpen()) closeTopLayer();
+    // если под закрытым окном есть ещё одно — снова ставим «пустую» запись
+    setTimeout(syncHistory, 0);
+  });
   function closeDialogs(){
     state.confirmDeleteId = null; state.renameBoardId = null; state.confirmCard = null; state.pendingBackup = null;
     render();
@@ -6407,7 +7252,7 @@ function lessoncalBoot(){
     state.modal = null; state.menuOpen = false; state.editing = null;
     state.transactionTarget = null; state.scheduleTimeTarget = null; state.detailTarget = null;
     state.renewTarget = null; state.incomeTarget = null; state.subTarget = null; state.balanceTarget = null;
-    state.boardTypePickerOpen = false;
+    state.boardTypePickerOpen = false; state.navStack = [];
     render();
   }
 
@@ -6440,10 +7285,73 @@ function lessoncalBoot(){
       case 'refresh-rates':
         refreshRatesFromApi(el.dataset.to);
         break;
+      case 'open-presets':
+        if(state.modal==='settings') state.navStack = (state.navStack || []).concat(['settings']);
+        openPresets();
+        break;
+      case 'preset-edit':
+        state.editing = {kind: 'preset', id: el.dataset.id}; render();
+        (function(){ var f = document.getElementById('preset-form'); if(f) f.scrollIntoView({behavior: 'smooth', block: 'center'}); })();
+        break;
+      case 'preset-cancel':
+        state.editing = null; render();
+        break;
+      case 'preset-delete':
+        (function(){
+          var list = loadPresets(), before = JSON.stringify(list);
+          savePresets(list.filter(function(x){ return x.id!==el.dataset.id; }));
+          if(state.editing && state.editing.id===el.dataset.id) state.editing = null;
+          qRenderPresets(); render();
+          showToast(T('Кнопка удалена'), {action: T('Отменить'), onAction: function(){ try{ localStorage.setItem(PRESETS_KEY, before); }catch(e){} qRenderPresets(); render(); }, duration: 5000});
+        })();
+        break;
+      case 'preset-up':
+        (function(){
+          var list = loadPresets(), i = list.findIndex(function(x){ return x.id===el.dataset.id; });
+          if(i>0){ var t0 = list[i-1]; list[i-1] = list[i]; list[i] = t0; savePresets(list); qRenderPresets(); render(); }
+        })();
+        break;
+      case 'tp-ap':
+        (function(){
+          el.dataset.ap = el.dataset.ap==='PM' ? 'AM' : 'PM';
+          el.textContent = el.dataset.ap;
+          var pr = el.closest('.time-pair');
+          if(pr) syncTimePair(pr);
+        })();
+        break;
+      case 'set-time12':
+        try{ localStorage.setItem(TIME12_KEY, el.dataset.t12==='12' ? '1' : '0'); }catch(e){}
+        TIME12 = el.dataset.t12==='12';
+        render();
+        break;
+      case 'toggle-more':
+        (function(){
+          var w = el.closest('.more-wrap');
+          var open = !w.classList.contains('open');
+          app.querySelectorAll('.more-wrap.open').forEach(function(x){ x.classList.remove('open'); });
+          w.classList.toggle('open', open);
+        })();
+        break;
+      case 'move-tomorrow':
+        moveUnfinishedToTomorrow(el.dataset.date);
+        break;
       case 'open-add':
-        state.modal = 'add'; state.menuOpen = false; state.editing = null; state.scheduleTimeTarget = null; render(); break;
+        state.modal = 'add'; state.menuOpen = false; state.editing = null; state.scheduleTimeTarget = null;
+        state.addKind = el.dataset.kind==='sub' ? 'sub' : 'expense';
+        render(); break;
+      case 'add-kind':
+        (function(){
+          var nmEl = app.querySelector('.overlay form input[name=name]');
+          var nm = nmEl ? nmEl.value : '';
+          state.addKind = el.dataset.kind==='sub' ? 'sub' : 'expense';
+          render();
+          var nm2 = app.querySelector('.overlay form input[name=name]');
+          if(nm2 && nm) nm2.value = nm;
+        })();
+        break;
       case 'close-modal':
         if(state.modal==='onboarding'){ markOnboarded(); state.onb = null; }
+        if(state.modal==='presets' && state.presetsFromQuick){ state.presetsFromQuick = false; setTimeout(function(){ openQuick(false); }, 260); }
         // окно пополнения, открытое из «Баланса», возвращает обратно в «Баланс»
         var backTo = (state.modal==='balance-op' && state.balanceTarget && state.balanceTarget.from==='balance') ? 'balance' : null;
         state.detailTarget = null; state.modal = null; state.editing = null; state.transactionTarget = null; state.scheduleTimeTarget = null;
@@ -6464,7 +7372,18 @@ function lessoncalBoot(){
         })();
         break;
       case 'open-settings':
+        state.navStack = state.menuOpen ? ['menu'] : [];
         state.modal = 'settings'; state.menuOpen = false; render(); break;
+      case 'modal-back':
+        (function(){
+          var to = (state.navStack || []).pop();
+          state.editing = null;
+          if(to==='menu'){ state.modal = null; state.menuOpen = true; }
+          else if(to){ state.modal = to; }
+          else state.modal = null;
+          render();
+        })();
+        break;
       case 'open-day':
         state.selectedDate = el.dataset.date; state.modal = 'day'; state.menuOpen = false; render(); break;
       case 'delete-subject':
@@ -6526,6 +7445,7 @@ function lessoncalBoot(){
       case 'toggle-done':
         ev.stopPropagation();
         toggleTaskDone(el.dataset.item, el.dataset.time, el.dataset.date, el.dataset.board);
+        if(el.dataset.date===fmt(todayD())) autoStreakCheck();
         break;
       case 'pick-schedule-day':
         state.scheduleDay = Number(el.dataset.day);
@@ -6718,32 +7638,30 @@ function lessoncalBoot(){
       case 'show-onboarding':
         startOnboarding();
         break;
-      case 'version-tap':
-        versionTap(el);
-        break;
       case 'open-admin':
-        if(isAdmin()){ state.modal = 'admin'; state.menuOpen = false; render(); }
+      case 'open-experimental':
+        if(state.modal==='settings') state.navStack = (state.navStack || []).concat(['settings']);
+        state.modal = 'admin'; state.menuOpen = false; render();
         break;
       case 'admin-date-set':
-        (function(){ var v = document.getElementById('adm-date').value; if(isValidDs(v)){ setFakeToday(v); showToast('Тестовая дата: '+fmtHuman(v)); } })();
-        break;
-      case 'admin-date-shift':
-        setFakeToday(fmt(addDays(todayD(), Number(el.dataset.days))));
-        showToast('Тестовая дата: '+fmtHuman(FAKE_TODAY));
-        break;
-      case 'admin-date-reset':
-        setFakeToday('');
-        showToast('Вернулась настоящая дата');
-        break;
-      case 'admin-streak-set':
         (function(){
-          var v = Math.max(0, Math.min(3650, parseInt(document.getElementById('adm-streak').value, 10) || 0));
-          setStreakTo(v, document.getElementById('adm-streak-today').checked, loadStreak().best);
-          showToast('Огонёк: '+v); render();
+          var v = document.getElementById('adm-date').value, tm = (document.getElementById('adm-time')||{}).value || '';
+          if(!isValidDs(v)) return;
+          setFakeNow(v, tm);
+          showToast(T('Тестовое время')+': '+fmtHuman(fmt(todayD()))+', '+fmtTime(nowHM()));
         })();
         break;
-      case 'admin-streak-reset':
-        saveStreak({days: [], best: 0}); showToast('Огонёк сброшен'); render();
+      case 'admin-date-shift':
+        shiftFakeNow(Number(el.dataset.days)*86400000);
+        showToast(T('Тестовое время')+': '+fmtHuman(fmt(todayD()))+', '+fmtTime(nowHM()));
+        break;
+      case 'admin-time-shift':
+        shiftFakeNow(Number(el.dataset.min)*60000);
+        showToast(T('Тестовое время')+': '+fmtHuman(fmt(todayD()))+', '+fmtTime(nowHM()));
+        break;
+      case 'admin-date-reset':
+        resetFakeNow();
+        showToast(T('Вернулись настоящие дата и время'));
         break;
       case 'admin-tpl':
         addTemplate(el.dataset.kind);
@@ -6752,13 +7670,8 @@ function lessoncalBoot(){
         state.modal = null;
         removeTestBoards();
         break;
-      case 'admin-exit':
-        try{ localStorage.removeItem(ADMIN_KEY); localStorage.removeItem(STREAK_FREE_KEY); }catch(e){}
-        state.modal = null;
-        setFakeToday('');
-        showToast('Админ-режим выключен');
-        break;
       case 'open-streak':
+        state.streakIgnite = false;
         state.modal = 'streak'; state.menuOpen = false; render(); break;
       case 'toggle-privacy':
         togglePrivacy();
@@ -6806,6 +7719,7 @@ function lessoncalBoot(){
         break;
       case 'edit-sub':
         ev.stopPropagation();
+        state.financeView = 'expenses';
         state.editing = {kind:'sub', id: el.dataset.id};
         state.modal = 'add';
         render();
@@ -6849,6 +7763,7 @@ function lessoncalBoot(){
       case 'habit-dec':
         ev.stopPropagation();
         habitAct(el.dataset.board, el.dataset.id, el.dataset.date, act.replace('habit-',''));
+        if(el.dataset.date===fmt(todayD())) autoStreakCheck();
         break;
       case 'income-unskip':
         unskipIncome(el.dataset.id, el.dataset.orig, el.dataset.kind || 'income');
@@ -6869,9 +7784,15 @@ function lessoncalBoot(){
     if(t && t.dataset && t.dataset.act==='edit-paiduntil'){
       updatePaidUntil(t.dataset.id, t.value);
     }
+    if(t && t.dataset && t.dataset.act==='set-exp-filter'){
+      state.expFilter = t.value;
+      render();
+    }
     if(t && t.dataset && t.dataset.act==='set-wheel-currency'){
       var b = activeBoard();
       b.wheelCurrency = t.value;
+      var rc0 = loadRatesCache();
+      if(rc0) applyRatesToBoards(rc0, b);
       saveData();
     }
     if(t && t.dataset && t.dataset.act==='set-rate'){
@@ -6891,6 +7812,11 @@ function lessoncalBoot(){
     var h = pair.querySelector('.tp-h').value, m = pair.querySelector('.tp-m').value;
     var hid = pair.querySelector('input[type=hidden]');
     if(!h && !m){ hid.value = ''; return; }
+    var ap = pair.querySelector('.tp-ap');
+    if(ap && h){
+      var hn = parseInt(h, 10) % 12 + (ap.dataset.ap==='PM' ? 12 : 0);
+      h = pad(hn);
+    }
     hid.value = h + ':' + (m || (h ? '00' : ''));
   }
   app.addEventListener('focusin', function(ev){
@@ -6904,14 +7830,16 @@ function lessoncalBoot(){
     if(!isTP(t)) return;
     var isH = t.classList.contains('tp-h');
     var pair = t.closest('.time-pair');
+    var h12 = pair.classList.contains('h12');
     var raw = t.value;
     var sepTyped = /\D/.test(raw);
     var digits = raw.replace(/\D/g, '').slice(0, 2);
-    // первая цифра точно не может начинать двузначное число: 3–9 для часов, 6–9 для минут
-    if(digits.length===1 && parseInt(digits,10) > (isH ? 2 : 5)) digits = '0' + digits;
+    // первая цифра точно не может начинать двузначное число: 3–9 для часов, 6–9 для минут (в 12-часовом режиме — 2–9)
+    if(digits.length===1 && parseInt(digits,10) > (isH ? (h12 ? 1 : 2) : 5)) digits = '0' + digits;
     if(digits.length===2){
-      var lim = isH ? 23 : 59;
+      var lim = isH ? (h12 ? 12 : 23) : 59;
       if(parseInt(digits,10) > lim) digits = String(lim);
+      if(isH && h12 && digits==='00') digits = '12';
     }
     // набрали разделитель (":" . , пробел) после одной цифры — это час с нулём впереди
     if(isH && sepTyped && digits.length===1) digits = '0' + digits;
@@ -7059,35 +7987,47 @@ function lessoncalBoot(){
   applyTheme();
   applyAnimMode();
   ensureQuick();
+  initCalcInputs();
   setInterval(updateNowHighlight, 15000);
   loadData();
+  autoRefreshRates();
+  checkBackupReminder();
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState!=='visible') return;
+    var c = loadRatesCache();
+    if(!c || Date.now()-c.ts > 60*60*1000) autoRefreshRates();
+  });
 }
 
 // ---------- запуск: сначала подгружаем словарь выбранного языка из languages/ ----------
+// По умолчанию и при любой ошибке — английский. Для языков кроме ru/en дополнительно грузим en.js:
+// если какой-то фразы нет в переводе (или файл не загрузился), она покажется по-английски.
 (function(){
-  var lang = 'ru';
+  var lang = 'en';
+  var all = ['ru','uk','en','de','es','fr','it','pl','pt'];
   try{
     var v = localStorage.getItem('lessoncal_lang');
-    if(v==='ru' || v==='uk' || v==='en') lang = v;
+    if(all.indexOf(v)!==-1) lang = v;
     else {
-      var list = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language || 'en'];
-      lang = 'en';
-      for(var i=0;i<list.length;i++){
-        var c = String(list[i]||'').toLowerCase().slice(0,2);
-        if(c==='uk'){ lang = 'uk'; break; }
-        if(c==='ru' || c==='be'){ lang = 'ru'; break; }
-        if(c==='en'){ lang = 'en'; break; }
-      }
+      // основной язык системы; если перевода нет — английский
+      var first = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
+      var c = String(first).toLowerCase().slice(0,2);
+      lang = all.indexOf(c)!==-1 ? c : 'en';
     }
-  }catch(e){}
-  var loaded = window.LESSONCAL_I18N && window.LESSONCAL_I18N[lang];
-  if(lang==='ru' || loaded){ lessoncalBoot(); return; }
-  var started = false;
+  }catch(e){ lang = 'en'; }
+  var need = [];
+  if(lang!=='ru'){
+    if(!(window.LESSONCAL_I18N && window.LESSONCAL_I18N[lang])) need.push(lang);
+    if(lang!=='en' && !(window.LESSONCAL_I18N && window.LESSONCAL_I18N.en)) need.push('en');
+  }
+  if(!need.length){ lessoncalBoot(); return; }
+  var started = false, left = need.length;
   var go = function(){ if(started) return; started = true; lessoncalBoot(); };
-  var sc = document.createElement('script');
-  sc.src = 'languages/' + lang + '.js';
-  sc.onload = go;
-  sc.onerror = go;           // нет файла (например, офлайн без кэша) — запускаемся по-русски
+  need.forEach(function(l){
+    var sc = document.createElement('script');
+    sc.src = 'languages/' + l + '.js';
+    sc.onload = sc.onerror = function(){ if(--left<=0) go(); };   // нет файла — всё равно запускаемся
+    document.head.appendChild(sc);
+  });
   setTimeout(go, 4000);      // на всякий случай не ждём вечно
-  document.head.appendChild(sc);
 })();
