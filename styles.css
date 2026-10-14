@@ -1212,7 +1212,7 @@ html.anim-off *, html.anim-off *::before, html.anim-off *::after{
 .adm-note{font-size:13px; color:var(--ink-dim); line-height:1.45; margin-bottom:8px;}
 .adm-note b{color:var(--ink);}
 .adm-row{display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px;}
-.adm-row input[type=date], .adm-row input[type=number]{background:var(--surface); border:none; color:var(--ink); border-radius:10px; padding:8px 10px; font-size:15px; min-height:36px;}
+.adm-row input[type=date], .adm-row input[type=time], .adm-row input[type=number]{background:var(--surface); border:none; color:var(--ink); border-radius:10px; padding:8px 10px; font-size:15px; min-height:36px;}
 .adm-row input:focus{outline:none; box-shadow:0 0 0 3px var(--accent-soft);}
 .adm-check{display:inline-flex; align-items:center; gap:6px; font-size:13.5px; color:var(--ink-dim); cursor:pointer;}
 .admin-modal .switch-label{background:var(--surface);}
@@ -1309,3 +1309,183 @@ html.anim-lite .onb-actions, html.anim-off .onb-actions{background:var(--surface
 @media (max-width:640px){
   .onb-actions{bottom:calc(-22px - env(safe-area-inset-bottom, 0px)); margin:20px -18px calc(-22px - env(safe-area-inset-bottom, 0px)); padding:14px 18px calc(22px + env(safe-area-inset-bottom, 0px));}
 }
+
+/* ---------- длинное уведомление (напоминание о копии) ---------- */
+.toast.long{border-radius:18px; text-align:left; width:min(440px, calc(100vw - 32px)); line-height:1.4;}
+
+/* ---------- калькулятор в полях суммы ---------- */
+.calc-input{font-variant-numeric:tabular-nums;}
+.calc-bar{display:flex; align-items:center; gap:6px; margin-top:6px; animation:dropIn .25s var(--spring) both;}
+.calc-bar button{flex:none; width:38px; height:32px; border:none; border-radius:10px; background:var(--fill-3); color:var(--accent); font-size:17px; font-weight:600; cursor:pointer; transition:transform .25s var(--spring), background .2s;}
+.calc-bar button:active{transform:scale(.9); background:var(--accent-soft);}
+.calc-res{flex:1; min-width:0; text-align:right; font-size:14px; font-weight:600; color:var(--ink); font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.calc-res.hint{font-weight:400; font-size:12px; color:var(--ink-dim);}
+.anim-off .calc-bar{animation:none;}
+
+/* ---------- свёрнутый блок «Записать в расходы» ---------- */
+.fin-box.collapsible{padding:0; overflow:hidden;}
+.fin-head{display:flex; align-items:center; gap:10px; width:100%; border:none; background:none; color:var(--ink); padding:12px 14px; cursor:pointer; text-align:left; font:inherit;}
+.fin-head .fin-title{margin:0; flex:none;}
+.fin-sum{flex:1; min-width:0; text-align:right; font-size:13px; color:var(--accent); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.fin-box.off .fin-sum{color:var(--ink-dim);}
+.fin-chev{flex:none; color:var(--ink-dim); font-size:18px; line-height:1; transition:transform .3s var(--spring);}
+.fin-box.open .fin-chev{transform:rotate(90deg);}
+.fin-body{display:grid; grid-template-rows:0fr; transition:grid-template-rows .32s var(--ease-out, ease);}
+.fin-box.open .fin-body{grid-template-rows:1fr;}
+.fin-body-in{min-height:0; overflow:hidden; padding:0 14px;}
+.fin-box.open .fin-body-in{padding-bottom:4px;}
+.anim-off .fin-body, .anim-off .fin-chev{transition:none;}
+
+/* ---------- курсы: автообновление ---------- */
+.rates-auto{display:flex; align-items:center; gap:12px; background:var(--fill-3); border-radius:14px; padding:10px 12px 10px 14px; margin-bottom:12px;}
+.rates-auto-text{flex:1; min-width:0; font-size:13px; line-height:1.4; color:var(--ink);}
+.rates-auto .btn{flex:none;}
+
+/* ---------- частые траты ---------- */
+.qs-presets{display:flex; gap:6px; overflow-x:auto; padding:6px 14px 0; scrollbar-width:none;}
+.qs-presets::-webkit-scrollbar{display:none;}
+.qs-presets .q-chip{flex:none;}
+.qs-presets .q-chip.qp{background:var(--accent-soft); color:var(--accent);}
+.qs-presets .q-chip.qp.broken{background:var(--fill-3); color:var(--ink-dim); text-decoration:line-through;}
+.qs-presets .q-chip.qp-set{color:var(--ink-dim); font-weight:500;}
+.preset-row .day-item-head{display:flex; justify-content:space-between; gap:10px;}
+.preset-row .nm{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.preset-where{font-size:13px; margin:2px 0 8px; overflow-wrap:anywhere;}
+.presets-modal .adm-title{margin:4px 0 10px;}
+
+/* ---------- планер: перенос на завтра ---------- */
+.move-tomorrow{display:block; margin:0 0 12px auto;}
+.tag.moved{color:var(--ink-dim); background:var(--fill-3); text-transform:none;}
+@media (max-width:640px){
+  .toast.long.has-action{width:auto; align-items:center; gap:10px;}
+}
+.task-row.is-moved td:not(.chk){opacity:.5;}
+
+/* ---------- компьютер, «Неделя»: если под календарём пусто — дни списком сверху вниз ---------- */
+@media (min-width:821px){
+  .cal-wrap.week.vertical .cal-dow{display:none;}
+  .cal-wrap.week.vertical .cal-grid{grid-template-columns:minmax(0,1fr); gap:6px;}
+  .cal-wrap.week.vertical .cal-cell, .cal-wrap.week.vertical.compact .cal-cell{min-height:var(--wk-row, 52px); flex-direction:row; align-items:flex-start; gap:14px; padding:8px 14px; text-align:left;}
+  .cal-wrap.week.vertical .wk-head{flex-direction:column; align-items:center; gap:2px; width:36px; flex:none;}
+  .cal-wrap.week.vertical .wk-dow{display:block; font-size:11px; font-weight:600; text-transform:uppercase; color:var(--ink-dim);}
+  .cal-wrap.week.vertical .cal-markers{flex-direction:row; flex-wrap:wrap; align-items:center; justify-content:flex-start; gap:6px 18px; margin-top:6px; flex:1; min-width:0;}
+  .cal-wrap.week.vertical .wk-item{max-width:100%;}
+  .cal-wrap.week.vertical .wk-txt{font-size:14px; color:var(--ink);}
+  .cal-wrap.week.vertical .marker{width:8px; height:8px;}
+}
+
+/* ---------- фильтр расходов и подписки ---------- */
+.exp-filter{margin:-4px 0 14px;}
+.exp-filter select{
+  width:100%; -webkit-appearance:none; appearance:none;
+  background:var(--fill-3) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238e8e93' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 14px center;
+  border:none; color:var(--ink); border-radius:10px; padding:9px 34px 9px 12px; font-size:15px; font-weight:500; cursor:pointer;
+}
+.exp-filter select:focus{outline:none; box-shadow:0 0 0 3px var(--accent-soft);}
+.subs-stats{background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow-card); padding:12px 14px; margin-bottom:12px;}
+.subs-stats-head{display:flex; justify-content:space-between; gap:8px; font-size:13px; font-weight:600; color:var(--ink); margin-bottom:8px;}
+.subs-stats-head span{font-weight:500; color:var(--ink-dim);}
+.subs-stats-row{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px;}
+.subs-stats-row > div{background:var(--fill-3); border-radius:12px; padding:8px 10px; min-width:0;}
+.subs-stats-row span{display:block; font-size:12px; color:var(--ink-dim);}
+.subs-stats-row b{display:block; font-size:16px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere;}
+.sub-line{font-size:13px; color:var(--ink-dim); margin-top:6px; line-height:1.45;}
+.sub-line .tag{margin-left:0;}
+.add-kind{margin:2px 0 12px;}
+
+/* ---------- время в 12-часовом формате ---------- */
+.tp-ap{flex:none; border:none; border-radius:8px; background:var(--accent-soft); color:var(--accent); font-weight:600; font-size:13px; padding:0 9px; height:32px; margin-left:6px; cursor:pointer; font-variant-numeric:tabular-nums;}
+.tp-ap:active{transform:scale(.94);}
+
+.admin-modal input[type=time]{flex:none; width:auto;}
+.adm-reset{width:100%; margin-top:10px;}
+.adm-reset:disabled{opacity:.45; cursor:default;}
+
+/* ---------- кнопка «Назад» рядом с крестиком ---------- */
+.modal .back-x{
+  position:absolute; top:18px; right:56px; width:30px; height:30px; border-radius:50%;
+  background:var(--fill-3); border:none; color:var(--ink-dim); cursor:pointer;
+  display:flex; align-items:center; justify-content:center; padding:0; z-index:2;
+  transition:background .2s, transform .35s var(--spring);
+}
+.modal .back-x:hover{background:var(--fill-2); color:var(--ink);}
+.modal .back-x:active{transform:scale(.88);}
+.modal.has-back > h3{padding-right:80px;}
+
+/* ---------- быстрый ввод: «?» рядом с настройкой частых трат ---------- */
+.qs-presets{padding-bottom:8px;}
+.qs-presets .q-chip.qp-help{color:var(--ink-dim); font-weight:600; min-width:34px;}
+
+/* ---------- телефон: список карточек не перехватывает прокрутку страницы ---------- */
+@media (max-width:820px){
+  .cards{max-height:min(560px, 70vh); overscroll-behavior:auto;}
+  .cards.scroll-lock{overflow-y:hidden;}
+}
+
+/* ---------- сколько потрачено за неделю/месяц (над календарём) ---------- */
+.cal-top.has-spent{justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;}
+.cal-spent{display:flex; align-items:baseline; gap:8px; min-width:0; font-size:13px; color:var(--ink-dim);}
+.cal-spent b{font-size:16px; color:var(--rose, #ff6b6b); font-variant-numeric:tabular-nums; overflow-wrap:anywhere;}
+
+/* ---------- баланс необязателен ---------- */
+.balance-optional{display:flex; align-items:center; gap:12px; background:var(--fill-3); border-radius:14px; padding:10px 12px 10px 14px; margin-bottom:18px;}
+.balance-optional > div{flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;}
+.balance-optional b{font-size:13px; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-dim);}
+.balance-optional span{font-size:13px; color:var(--ink-dim); line-height:1.35;}
+.balance-optional .btn{flex:none;}
+
+/* ---------- «⋯» меню под колесом ---------- */
+.more-wrap{position:relative; display:inline-block;}
+.more-dots{min-width:40px; font-size:16px; line-height:1; letter-spacing:1px;}
+.more-menu{position:absolute; left:0; top:calc(100% + 6px); z-index:30; min-width:210px; display:none; flex-direction:column; padding:6px;
+  background:var(--material-strong); -webkit-backdrop-filter:blur(30px) saturate(180%); backdrop-filter:blur(30px) saturate(180%);
+  border-radius:14px; box-shadow:var(--shadow-pop);}
+.more-wrap.open .more-menu{display:flex; animation:dropIn .22s var(--spring) both;}
+.more-menu button{border:none; background:none; color:var(--ink); text-align:left; font:inherit; font-size:14px; padding:10px 12px; border-radius:10px; cursor:pointer; white-space:nowrap;}
+.more-menu button:hover, .more-menu button:active{background:var(--fill-3);}
+.anim-off .more-wrap.open .more-menu{animation:none;}
+
+/* ---------- сравнение с прошлым периодом ---------- */
+.cal-spent .cmp{font-size:12px; font-weight:600; border-radius:999px; padding:2px 8px; white-space:nowrap;}
+.cal-spent .cmp.up{color:var(--rose); background:var(--danger-soft);}
+.cal-spent .cmp.down{color:var(--sage, #30d158); background:rgba(48,209,88,.14);}
+.cal-spent .cmp.same{color:var(--ink-dim); background:var(--fill-3);}
+.cal-spent{flex-wrap:wrap;}
+
+/* ---------- огонёк: прогресс дня ---------- */
+.st-progress{margin:14px 0 4px; text-align:center;}
+.st-progress .budget-bar{height:8px; margin:0 0 10px;}
+.st-progress .budget-bar i{background:linear-gradient(90deg, #ffb340, #ff7a1a);}
+.sw-day.rest i{opacity:.35;}
+
+/* ---------- «Сейчас идёт»: плашка сверху ---------- */
+#now-banner:empty{display:none;}
+.now-banner{display:flex; align-items:center; gap:10px; width:100%; border:none; cursor:pointer; text-align:left; font:inherit;
+  background:var(--surface); color:var(--ink); border-radius:14px; padding:10px 14px; margin:0 0 16px; box-shadow:var(--shadow-card);
+  border-left:4px solid var(--mc);}
+.now-banner b{font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.nb-dot{width:9px; height:9px; border-radius:50%; background:var(--mc); flex:none;}
+.now-banner.live .nb-dot{animation:nowPulse 1.6s ease-in-out infinite;}
+.nb-tag{flex:none; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#fff; background:var(--rose); border-radius:6px; padding:2px 6px;}
+.nb-tag.soon{background:var(--accent);}
+.nb-meta{margin-left:auto; flex:none; font-size:13px; color:var(--ink-dim); white-space:nowrap;}
+.nb-more{flex:none; font-size:12px; color:var(--ink-dim); background:var(--fill-3); border-radius:999px; padding:2px 7px;}
+@keyframes nowPulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb, var(--mc) 60%, transparent)}50%{box-shadow:0 0 0 6px transparent}}
+.anim-off .now-banner.live .nb-dot{animation:none;}
+@media (max-width:640px){
+  .now-banner{flex-wrap:wrap; row-gap:4px;}
+  .nb-meta{margin-left:0; width:100%; padding-left:19px;}
+}
+
+/* ---------- «Сейчас» в сводке ---------- */
+.sum-now{display:flex; flex-direction:column; gap:6px; margin:4px 0 16px;}
+.sum-now-row{display:flex; align-items:center; gap:10px; background:var(--fill-3); border-radius:12px; padding:10px 12px;}
+.sum-now-row.live{background:var(--danger-soft);}
+.sum-now-row .dot{width:9px; height:9px; border-radius:50%; flex:none;}
+.sn-tag{flex:none; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--accent);}
+.sum-now-row.live .sn-tag{color:var(--rose);}
+.sn-name{flex:1; min-width:0; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.sn-name small{display:block; font-weight:400; font-size:12px; color:var(--ink-dim);}
+.sn-meta{flex:none; font-size:13px; color:var(--ink-dim);}
+.sum-row.is-now{background:var(--danger-soft); border-radius:10px; padding-left:8px; padding-right:8px;}
+.sum-row.is-now .sum-meta{color:var(--rose); font-weight:600;}
