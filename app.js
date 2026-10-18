@@ -553,14 +553,13 @@ function lessoncalBoot(){
   }
   // тихое обновление при запуске: без уведомлений и без перерисовки открытой формы
   function autoRefreshRates(){
-    if(!state.boards.some(function(b){ return b.type==='finance'; })) return;
     var c = loadRatesCache();
     if(c && Date.now()-c.ts < 10*60*1000) return; // только что обновляли
     fetchRates().then(function(cache){
       applyRatesToBoards(cache);
       try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({boards: state.boards, activeBoardId: state.activeBoardId})); }catch(e){}
       var busy = document.activeElement && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
-      if(!state.modal && !busy && !quick.open) render();
+      if((!state.modal || state.modal==='rates') && !busy && !quick.open) render();
     }).catch(function(){});
   }
   // кнопка «Обновить курсы» — с уведомлениями
@@ -1394,11 +1393,16 @@ function lessoncalBoot(){
     if(!list.length) return '';
     var x = list[0];
     var color = COLORS[x.color] || COLORS.amber;
-    var txt = x.kind==='now'
-      ? '<span class="nb-tag">'+T('Сейчас')+'</span><b>'+escapeHtml(x.name)+'</b><span class="nb-meta">'+timeRangeStr({timeStart: x.start, timeEnd: x.end})+' · '+T('ещё')+' '+minText(x.left)+'</span>'
-      : '<span class="nb-tag soon">'+T('Скоро')+'</span><b>'+escapeHtml(x.name)+'</b><span class="nb-meta">'+fmtTime(x.start)+' · '+T('через')+' '+minText(x.inMin)+'</span>';
-    var more = list.length > 1 ? '<span class="nb-more">+'+(list.length-1)+'</span>' : '';
-    return '<button type="button" class="now-banner'+(x.kind==='now'?' live':'')+'" data-act="open-summary" style="--mc:'+color+'"><span class="nb-dot"></span>'+txt+more+'</button>';
+    // до двух строк в одном блоке: «сейчас» и «скоро» (или два одновременных)
+    var line = function(it){
+      var c = COLORS[it.color] || COLORS.amber;
+      return '<span class="nb-line'+(it.kind==='now'?' live':'')+'" style="--lc:'+c+'"><span class="nb-dot"></span>'+(it.kind==='now'
+        ? '<span class="nb-tag">'+T('Сейчас')+'</span><b>'+escapeHtml(it.name)+'</b><span class="nb-meta">'+timeRangeStr({timeStart: it.start, timeEnd: it.end})+' · '+T('ещё')+' '+minText(it.left)+'</span>'
+        : '<span class="nb-tag soon">'+T('Скоро')+'</span><b>'+escapeHtml(it.name)+'</b><span class="nb-meta">'+fmtTime(it.start)+' · '+T('через')+' '+minText(it.inMin)+'</span>')+'</span>';
+    };
+    var more = list.length > 2 ? '<span class="nb-more">+'+(list.length-2)+'</span>' : '';
+    return '<button type="button" class="now-banner'+(x.kind==='now'?' live':'')+(list.length>1?' two':'')+'" data-act="open-summary" style="--mc:'+color+'">'+
+      '<span class="nb-lines">'+list.slice(0, 2).map(line).join('')+'</span>'+more+'</button>';
   }
   function updateNowBanner(){
     var el = document.getElementById('now-banner');
@@ -2053,7 +2057,7 @@ function lessoncalBoot(){
     var todayStr = fmt(todayD());
     var html = '<div class="sidebar"><h2>'+T('Привычки')+'</h2>'+renderSearchBox()+'<div class="cards">';
     if(!ab.habits.length){
-      html += '<div class="empty" style="padding:20px 6px;"><div class="display">'+T('Пока пусто')+'</div>'+T('Добавьте привычку — например, «Вода, 8 стаканов» или «Спорт» по будням.')+'</div>';
+      html += '<div class="empty" style="padding:20px 6px;"><div class="display">'+T('Пока пусто')+'</div>'+T('Добавьте привычку — например, «Вода, 8 стаканов» или «Спорт» по будням.')+'</div>'+ghostCards('habits');
     }
     ab.habits.forEach(function(h){
       var color = COLORS[h.color] || COLORS.amber;
@@ -2231,12 +2235,12 @@ function lessoncalBoot(){
     var raw = String(text||'').trim();
     var res = {raw: raw, amount: null, sign: 0, currency: null, date: null, dateWord: '', words: [], rawWords: [], noBalance: false};
     // «85 + 40» → «85+40», чтобы пример посчитался как одна сумма
-    var toks = raw.replace(/(\d)\s*([+*×÷])\s*(?=\d)/g, '$1$2').replace(Q_NOBAL_PHRASE, ' нмб ').replace(/([0-9])(₴|\$|€|£|₺|₸|₾|₹|₽|грн|uah|usd|eur|pln|zł|kč)/gi, '$1 $2').replace(/(r\$|₴|\$|€|£|₺|₸|₾|₹|₽)([0-9])/gi, '$1 $2').split(/\s+/).filter(Boolean);
+    var toks = raw.replace(/(\d)\s*([+*×xX÷])\s*(?=\d)/g, '$1$2').replace(/(\d)\s+[-−]\s+(?=\d)/g, '$1-').replace(Q_NOBAL_PHRASE, ' нмб ').replace(/([0-9])(₴|\$|€|£|₺|₸|₾|₹|₽|грн|uah|usd|eur|pln|zł|kč)/gi, '$1 $2').replace(/(r\$|₴|\$|€|£|₺|₸|₾|₹|₽)([0-9])/gi, '$1 $2').split(/\s+/).filter(Boolean);
     var t = todayD();
     toks.forEach(function(orig){
       var tok = orig.toLowerCase();
       // калькулятор: «кофе 85+40», «такси 3*120»
-      var cm = tok.match(/^([+]?)(\d+(?:[.,]\d+)?(?:[+\-−*×x÷]\d+(?:[.,]\d+)?)+)$/);
+      var cm = tok.match(/^([+]?)(\d+(?:[.,]\d+)?(?:[+\-−*×xX÷]\d+(?:[.,]\d+)?)+)$/);
       if(cm && res.amount===null){
         var cv = calcEval(cm[2]);
         if(typeof cv==='number' && !isNaN(cv) && cv>0){
@@ -2734,6 +2738,7 @@ function lessoncalBoot(){
     qBot('<b>'+T('Как писать')+'</b><div class="q-lines">'+
       '<div><b>'+T('кофе 85')+'</b> — '+T('трата сегодня')+'</div>'+
       '<div><b>'+T('такси 200 вчера')+'</b> — '+T('трата за вчера (или дата: 28.09)')+'</div>'+
+      '<div><b>'+T('продукты 85+115+300')+'</b> — '+T('посчитает сумму сам: можно + − × ÷')+'</div>'+
       (hb ? '<div><b>'+T('хлеб 30 карта')+'</b> — '+T('с конкретного счёта, подкатегории тоже находятся')+'</div>'+
       '<div><b>'+T('кофе 85 нмб')+'</b> — '+T('записать трату, не меняя баланс')+' («'+T('нмб')+'» = '+T('не менять баланс')+')</div>'+
       '<div><b>'+T('+500 карта')+'</b> — '+T('пополнить счёт')+'</div>' : '')+
@@ -2785,6 +2790,7 @@ function lessoncalBoot(){
       html = '<div class="qs-sg-title">'+T('Что можно написать')+'</div>'+
         qRow('<b>'+T('название')+'</b> <b>'+T('сумма')+'</b>', T('трата сегодня')+' · '+T('кофе 85'), T('кофе 85'), 'set')+
         qRow('<b>'+T('название')+'</b> <b>'+T('сумма')+'</b> '+T('вчера'), T('или дата, например 28.09'), T('такси 200 вчера'), 'set')+
+        qRow('<b>'+T('название')+'</b> <b>85+115+300</b>', T('посчитает сумму сам: можно + − × ÷'), T('продукты 85+115+300'), 'set')+
         (anyBalances() ?
         qRow('<b>'+T('название')+'</b> <b>'+T('сумма')+'</b> <b>'+T('счёт')+'</b>', T('списать с конкретного счёта'), T('хлеб 30 карта'), 'set')+
         qRow('<b>'+T('название')+'</b> <b>'+T('сумма')+'</b> '+T('нмб'), T('не менять баланс'), T('кофе 85 нмб'), 'set')+
@@ -2813,7 +2819,7 @@ function lessoncalBoot(){
       if(target){
         var acc = qTakeAccount(tp, target.board, target.item.currency, kind==='expense') || qDefaultAccount(target.board, target.item, target.item.currency, kind);
         preview = '<span class="qs-sg-ok">↵</span> <b>'+escapeHtml(target.item.name)+(target.sub ? ' › '+escapeHtml(target.sub.name) : '')+'</b> · '+
-          (kind==='income' ? '+' : '−')+fmtMoney2(p.amount, target.item.currency)+
+          (kind==='income' ? '+' : '−')+fmtMoney2(p.amount, target.item.currency)+(p.calc ? ' <span class="qs-calc">= '+escapeHtml(p.calc.replace(/\*/g,'×'))+'</span>' : '')+
  (!target.board.balances.length ? '' : p.noBalance ? ' · <i>'+T('баланс не меняется')+'</i>' : (acc ? ' · '+T('счёт')+' «'+escapeHtml(acc.label || T('счёт'))+'»' : ''))+(p.dateWord ? ' · '+escapeHtml(p.dateWord) : '')+
           (tp.accountMiss ? '<br><span class="qs-sg-warn">!</span> '+T('Счёт')+' «'+escapeHtml(tp.accountMiss)+'» '+T('не найден — использован основной') : '')+
           (tp.accountSecondary && !p.noBalance ? '<br><span class="qs-sg-warn">!</span> «'+escapeHtml(tp.accountSecondary)+'» — '+T('второстепенный, для трат используется основной') : '');
@@ -3296,7 +3302,7 @@ function lessoncalBoot(){
     var payDay = Math.min(t.getDate(), 28);
     var salary = {id: uid(), name: T('Зарплата'), color: 'sage', amount: 40000, currency: 'UAH', scheduleType: 'monthly', dayOfMonth: payDay,
       history: [], confirmed: {}, postponed: {}, skipped: [], createdAt: fmt(t)};
-    for(var k=1;k<=5;k++){ var od = tplMonthDay(k, payDay); salary.history.push({id: uid(), date: od, amount: 40000, balanceId: card.id, occ: od, noCard: true}); salary.confirmed[od] = salary.history[salary.history.length-1].id; }
+    for(var k=1;k<=13;k++){ var od = tplMonthDay(k, payDay); salary.history.push({id: uid(), date: od, amount: 40000, balanceId: card.id, occ: od, noCard: true}); salary.confirmed[od] = salary.history[salary.history.length-1].id; }
     var freelance = {id: uid(), name: T('Фриланс'), color: 'sky', amount: 0, currency: 'UAH', scheduleType: 'once', date: tplDs(5), dayOfMonth: 1,
       history: [{id: uid(), date: tplMonthDay(1, 14), amount: 6500}, {id: uid(), date: tplMonthDay(3, 9), amount: 4200}], confirmed: {}, postponed: {}, skipped: [], createdAt: fmt(t)};
     freelance.amount = 10700;
@@ -3304,7 +3310,7 @@ function lessoncalBoot(){
     function exp(name, color, budget, subs, perMonth, curDays){
       var e = {id: uid(), name: name, color: color, amount: 0, currency: 'UAH', budget: budget, subs: [], history: [], aliases: [], recurring: null};
       e.subs = subs.map(function(n){ return {id: uid(), name: n, amount: 0}; });
-      for(var m=5; m>=0; m--){
+      for(var m=13; m>=0; m--){
         var cnt = m===0 ? curDays : 4;
         for(var j=0;j<cnt;j++){
           var day = m===0 ? Math.max(1, t.getDate() - j*2) : 3 + j*6;
@@ -3323,7 +3329,8 @@ function lessoncalBoot(){
     var taxi = exp(T('Такси'), 'lilac', 0, [], 900, 2);
     var rent = {id: uid(), name: T('Аренда'), color: 'rose', amount: 45000, currency: 'UAH', budget: 0, subs: [], history: [], aliases: [],
       recurring: {scheduleType: 'monthly', amount: 9000, dayOfMonth: t.getDate(), balanceId: card.id, confirmed: {}, postponed: {}, skipped: [], createdAt: fmt(t)}};
-    for(var r=1;r<=5;r++) rent.history.push({id: uid(), date: tplMonthDay(r, t.getDate()), amount: 9000, balanceId: card.id, balAmount: 9000});
+    for(var r=1;r<=13;r++) rent.history.push({id: uid(), date: tplMonthDay(r, t.getDate()), amount: 9000, balanceId: card.id, balAmount: 9000});
+    rent.amount = 9000*13;
     var util = {id: uid(), name: T('Коммуналка'), color: 'aqua', amount: 0, currency: 'UAH', budget: 0, subs: [], history: [], aliases: [T('свет'), T('газ')],
       recurring: {scheduleType: 'monthly', amount: 1800, dayOfMonth: addDays(t, 2).getDate(), balanceId: card.id, confirmed: {}, postponed: {}, skipped: [], createdAt: fmt(t)}};
     b.expenses = [shop, cafe, taxi, rent, util];
@@ -3458,6 +3465,214 @@ function lessoncalBoot(){
   }
 
   // =====================================================================
+  // ---------- ГАЙД: подсвечиваем элементы по очереди и объясняем ----------
+  // =====================================================================
+  var TOUR_KEY = 'lessoncal_tour';  // '1' — прошёл или отказался, больше не предлагаем
+  var tour = null;
+  // обучение по остальным доскам (кроме событий)
+  var TOUR_END = function(){ return {sel: null, title: T('Готово!'), text: T('Это обучение можно пройти ещё раз: меню ☰ → Настройки → «Обучение».')}; };
+  var FLAME_STEP = function(){ return {sel: '.streak-bar', title: T('Огонёк'), text: T('Выполните все привычки и задачи на сегодня — огонёк загорится сам. Дни без планов серию не прерывают.')}; };
+  var BOARD_TOURS = {
+    lessons: function(){ return [
+      {sel: '.sidebar .notice', title: T('Напоминание об оплате'), text: T('Когда оплаченные уроки заканчиваются или абонемент подходит к концу, здесь появится кнопка «Продлить».')},
+      {sel: '.sidebar .cards', title: T('Курсы'), text: T('Дни и время занятий, сколько уроков осталось и до какого дня хватит. ↻ на карточке — продлить и посмотреть историю оплат.')},
+      {sel: '.cal-wrap', title: T('Календарь'), text: T('Точки — занятия. Нажмите на день, чтобы отменить урок или перенести его на другую дату.')},
+      {sel: '.add-card', title: T('Добавить курс'), text: T('Оплата бывает по урокам (например, 8 занятий) или абонементом до определённой даты.')},
+      TOUR_END()
+    ]; },
+    schedule: function(){ return [
+      {sel: '.sidebar .cards', title: T('Предметы'), text: T('У каждого предмета свои дни и время. Кнопка «+» на карточке добавляет ещё одно время.')},
+      {sel: '.cal-col .finance-wheel-wrap', title: T('Расписание на день'), text: T('Выберите день недели — увидите все пары по порядку. Та, что идёт сейчас, подсвечивается.')},
+      {sel: '.add-card', title: T('Добавить урок'), text: T('Сначала создайте предмет, потом расставьте для него дни и время.')},
+      TOUR_END()
+    ]; },
+    planner: function(){ return [
+      {sel: '.sidebar .cards', title: T('Задачи'), text: T('Задачи бывают повторяющимися (по дням недели) и разовыми — на конкретную дату.')},
+      {sel: '.cal-col .finance-wheel-wrap', title: T('План на день'), text: T('Отмечайте выполненное галочкой. Отметки «выполнено» сбрасываются каждый понедельник.')},
+      {sel: '.move-tomorrow', title: T('Не успели?'), text: T('Одной кнопкой перенесите всё невыполненное на завтра.')},
+      FLAME_STEP(),
+      {sel: '.add-card', title: T('Добавить задачу'), text: T('Создайте задачу, а потом выберите дни и время — или одну дату.')},
+      TOUR_END()
+    ]; },
+    habits: function(){ return [
+      {sel: '.sidebar .cards', title: T('Привычки'), text: T('Отмечайте галочкой или счётчиком (например, 8 стаканов воды). На карточке видно серию и рекорд.')},
+      {sel: '.finance-wheel-wrap.stats', title: T('Сегодня'), text: T('Прогресс по всем привычкам на сегодня и статистика за последние 30 дней.')},
+      FLAME_STEP(),
+      {sel: '.add-card', title: T('Добавить привычку'), text: T('Выберите дни, когда привычка нужна: в остальные дни она не ждёт отметки и не ломает серию.')},
+      TOUR_END()
+    ]; }
+  };
+  function finView(v){ return function(){ if(state.financeView!==v){ state.financeView = v; state.expFilter = 'all'; render(); } }; }
+  function financeTourSteps(){
+    var phone = window.innerWidth <= 820;
+    return [
+      {sel: '.month-extra .segmented', title: T('Доходы и расходы'), text: T('Доска финансов работает в двух режимах. Переключайте их здесь: доходы — что приходит, расходы — куда уходит.')},
+      {pre: finView('income'), sel: '.balance-widget, .balance-optional', title: T('Баланс'), text: T('Ваши счета и сколько на них денег. Вести баланс не обязательно — всё работает и без него.')},
+      {pre: finView('income'), sel: '.sidebar .cards', title: T('Доходы'), text: T('Зарплата, фриланс и другие поступления. В день выплаты приложение спросит «Пришла?» и зачислит деньги на счёт.')},
+      {pre: finView('expenses'), sel: '.cal-spent', title: T('Сколько потрачено'), text: T('Траты за неделю или месяц — и на сколько больше или меньше, чем в прошлый раз.')},
+      {pre: finView('expenses'), sel: '.exp-filter', title: T('Фильтр'), text: T('Все расходы, обычные или подписки. У подписок сверху видно, сколько уходит в месяц и в год.')},
+      {pre: finView('expenses'), sel: '.sidebar .cards', title: T('Категории расходов'), text: T('Кафе, такси, аренда… Кнопка «+» на карточке добавляет трату. Можно задать бюджет на месяц и регулярный платёж.')},
+      {pre: finView('expenses'), sel: '.cal-col .finance-wheel-wrap:not(.stats)', title: T('Колесо'), text: T('Показывает, куда уходят деньги: чем больше доля, тем больше трат.')},
+      {pre: finView('expenses'), sel: '.more-dots', title: T('Ещё'), text: T('Курсы валют, история транзакций и статистика трат за месяц, полгода, год или всё время.')},
+      {pre: finView('expenses'), sel: '.finance-wheel-wrap.stats', title: T('Последние 6 месяцев'), text: T('Доходы против расходов по месяцам и итог каждого месяца.')},
+      phone ? {sel: '#quick-fab', title: T('Быстрый ввод'), text: T('Быстрее всего записывать траты здесь: «кофе 85», «такси 120 вчера», «продукты 85+115».')} : null,
+      TOUR_END()
+    ].filter(Boolean);
+  }
+  function tourSteps(){
+    if(tour && tour.kind==='finance') return financeTourSteps();
+    if(tour && BOARD_TOURS[tour.kind]) return BOARD_TOURS[tour.kind]().filter(function(st){ return st && (!st.sel || tourTarget(st.sel)); });
+    var ab = activeBoard(), phone = window.innerWidth <= 820;
+    var cardsSel = '.sidebar .cards';
+    return [
+      {sel: '[data-act="open-menu"]', title: T('Доски'), text: T('Здесь все ваши доски: занятия, финансы, привычки… Переключайтесь между ними и создавайте новые. Там же — настройки.')},
+      {sel: '.month-switch', title: T('Месяц и неделя'), text: T('Листайте месяцы стрелками. «Сегодня» вернёт к текущему дню.')},
+      {sel: '[data-act="open-summary"]', title: T('Сводка'), text: T('Всё важное на сегодня со всех досок: уроки, платежи, привычки и задачи.')},
+      {sel: '.cal-wrap', title: T('Календарь'), text: T('Нажмите на любой день — откроются все записи и действия этого дня. Сверху можно переключить «Неделя / Месяц».')},
+      {sel: cardsSel, title: T('Карточки'), text: T('Всё, что есть на доске. Кнопками на карточке можно изменить, удалить или добавить сумму.')},
+      {sel: '.add-card', title: T('Добавить'), text: T('Эта кнопка добавляет новую карточку на текущую доску.')},
+      phone ? {sel: '#quick-fab', title: T('Быстрый ввод'), text: T('Напишите одной строкой, например «кофе 85» — трата запишется сама. Можно считать: «продукты 85+115».')} : null,
+      {sel: '[data-act="toggle-privacy"]', title: T('Скрыть суммы'), text: T('Глаз прячет все суммы — удобно, если рядом кто-то есть.')},
+      {sel: null, title: T('Готово!'), text: T('Обучение всегда можно пройти ещё раз: меню ☰ → Настройки → «Обучение».')}
+    ].filter(function(x){ return x && (!x.sel || tourTarget(x.sel)); });
+  }
+  // небольшой блок на доске финансов: «Впервые здесь? Пройдите обучение» с крестиком
+  function finTourOfferHtml(){
+    try{ if(localStorage.getItem(FIN_TOUR_KEY)==='1') return ''; }catch(e){ return ''; }
+    return '<div class="tour-offer"><span class="to-ico">🧭</span><span class="to-text"><b>'+T('Как устроены финансы?')+'</b>'+
+      T('Короткое обучение: доходы, расходы, баланс и статистика.')+'</span>'+
+      '<button type="button" class="btn small primary" data-act="start-fin-tour">'+T('Пройти')+'</button>'+
+      '<button type="button" class="close-x to-x" data-act="dismiss-fin-tour" aria-label="'+T('Закрыть')+'">✕</button></div>';
+  }
+  function tourTarget(sel){
+    var list = document.querySelectorAll(sel);
+    for(var i=0;i<list.length;i++){
+      var r = list[i].getBoundingClientRect();
+      if(r.width > 0 && r.height > 0 && getComputedStyle(list[i]).visibility!=='hidden') return list[i];
+    }
+    return null;
+  }
+  var FIN_TOUR_KEY = 'lessoncal_fin_tour';
+  var TUTORIALS = [
+    {kind: 'main', ico: '🧭', title: 'Основы', text: 'Где что находится: доски, календарь, сводка, быстрый ввод.'},
+    {kind: 'lessons', ico: '📚', title: 'Занятия', text: 'Курсы, оплата по урокам или абонементу, продление и перенос уроков.'},
+    {kind: 'finance', ico: '💳', title: 'Финансы', text: 'Доходы, расходы, баланс, подписки и статистика — по шагам.'},
+    {kind: 'schedule', ico: '🗓', title: 'Расписание', text: 'Предметы по дням недели и расписание на каждый день.'},
+    {kind: 'planner', ico: '✅', title: 'Планер задач', text: 'Задачи по дням, отметки «выполнено», перенос на завтра и огонёк.'},
+    {kind: 'habits', ico: '🔥', title: 'Привычки', text: 'Отметки, серии и как зажечь огонёк.'}
+  ];
+  function renderTutorialsModal(){
+    var rows = TUTORIALS.map(function(x){
+      var has = x.kind==='main' || state.boards.some(function(b){ return b.type===x.kind; });
+      return '<button type="button" class="set-btn tut-btn'+(has?'':' off')+'" data-act="start-tutorial" data-kind="'+x.kind+'"'+(has?'':' disabled')+'>'+
+        '<span class="set-ico">'+x.ico+'</span><span>'+T(x.title)+'<small>'+(has ? T(x.text) : T('Сначала создайте такую доску в меню ☰.'))+'</small></span></button>';
+    }).join('');
+    return '<div class="overlay"><div class="modal narrow settings-modal" data-stop="1">'+
+      '<button class="close-x" data-act="close-modal">✕</button>'+
+      '<h3 class="display">🎓 '+T('Обучение')+'</h3>'+
+      '<div class="sub">'+T('Короткие пошаговые подсказки прямо на экране. Можно пройти в любой момент.')+'</div>'+
+      '<div class="set-group"><div class="set-box">'+rows+'</div></div>'+
+    '</div></div>';
+  }
+  function startTour(kind){
+    if(!TUTORIALS.some(function(x){ return x.kind===kind; })) kind = 'main';
+    try{ localStorage.setItem(kind==='finance' ? FIN_TOUR_KEY : TOUR_KEY, '1'); }catch(e){}
+    if(kind!=='main' && activeBoard().type!==kind){
+      var same = state.boards.filter(function(b){ return b.type===kind; });
+      var fb = same.find(function(b){ return (b.subjects && b.subjects.length) || (b.scheduleItems && b.scheduleItems.length) || (b.habits && b.habits.length); }) || same[0];
+      if(fb){ state.activeBoardId = fb.id; state.search = ''; state.financeView = 'income'; }
+    }
+    pendingTourKind = kind;
+    hideToast();
+    if(quick.open) closeQuick();
+    state.modal = null; state.menuOpen = false; state.navStack = [];
+    render();
+    window.scrollTo(0, 0);
+    // ждём, пока закроются окна (иначе кнопка быстрого ввода ещё скрыта)
+    setTimeout(buildTour, 380);
+  }
+  var pendingTourKind = 'main';
+  function buildTour(){
+    if(tour) return;
+    tour = {i: 0, kind: pendingTourKind};
+    tour.steps = tourSteps();
+    var el = document.createElement('div');
+    el.id = 'tour';
+    el.innerHTML = '<div class="tour-spot"></div><div class="tour-tip" role="dialog"><div class="tour-count"></div><div class="tour-title"></div><div class="tour-text"></div>'+
+      '<div class="tour-btns"><button type="button" class="btn small tour-skip">'+T('Пропустить')+'</button><button type="button" class="btn small primary tour-next"></button></div></div>';
+    document.body.appendChild(el);
+    tour.el = el;
+    syncHistory();
+    el.querySelector('.tour-skip').addEventListener('click', endTour);
+    el.querySelector('.tour-next').addEventListener('click', function(){ tourGo(tour.i + 1); });
+    el.addEventListener('click', function(ev){ if(ev.target===el) tourGo(tour.i + 1); });
+    window.addEventListener('resize', tourPlace);
+    window.addEventListener('scroll', tourOnScroll, {passive: true});
+    tourGo(0);
+  }
+  function endTour(){
+    if(!tour) return;
+    window.removeEventListener('resize', tourPlace);
+    window.removeEventListener('scroll', tourOnScroll);
+    var el = tour.el; tour = null;
+    syncHistory();
+    el.classList.add('out');
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 250);
+  }
+  function tourGo(i){
+    if(!tour) return;
+    if(i >= tour.steps.length){ endTour(); return; }
+    tour.i = i;
+    var st = tour.steps[i];
+    if(st.pre) st.pre();
+    var tg = st.sel ? tourTarget(st.sel) : null;
+    if(st.sel && !tg){ tourGo(i + 1); return; }   // такого элемента сейчас нет — пропускаем шаг
+    tour.el.querySelector('.tour-count').textContent = (i+1)+' / '+tour.steps.length;
+    tour.el.querySelector('.tour-title').textContent = st.title;
+    tour.el.querySelector('.tour-text').textContent = st.text;
+    tour.el.querySelector('.tour-next').textContent = i===tour.steps.length-1 ? T('Начать') : T('Далее');
+    tour.el.querySelector('.tour-skip').style.visibility = i===tour.steps.length-1 ? 'hidden' : '';
+    if(tg){
+      var r = tg.getBoundingClientRect();
+      if(r.top < 70 || r.bottom > window.innerHeight - 20) tg.scrollIntoView({block: r.height > window.innerHeight*0.6 ? 'start' : 'center', behavior: 'smooth'});
+      setTimeout(tourPlace, 380);
+    }
+    tourPlace();
+  }
+  var tourRaf = 0;
+  function tourOnScroll(){ if(tourRaf) return; tourRaf = requestAnimationFrame(function(){ tourRaf = 0; tourPlace(); }); }
+  function tourPlace(){
+    if(!tour) return;
+    var st = tour.steps[tour.i], tg = st.sel ? tourTarget(st.sel) : null;
+    var spot = tour.el.querySelector('.tour-spot'), tip = tour.el.querySelector('.tour-tip');
+    var vw = document.documentElement.clientWidth, vh = window.innerHeight;
+    if(!tg){
+      spot.style.cssText = 'left:50%;top:50%;width:0;height:0;';
+      tip.style.left = Math.max(12, (vw - tip.offsetWidth)/2) + 'px';
+      tip.style.top = Math.max(12, (vh - tip.offsetHeight)/2) + 'px';
+      return;
+    }
+    var r = tg.getBoundingClientRect(), pad = 6;
+    var top = Math.max(4, r.top - pad), bottom = Math.min(vh - 4, r.bottom + pad);
+    spot.style.cssText = 'left:'+(r.left - pad)+'px;top:'+top+'px;width:'+(r.width + pad*2)+'px;height:'+Math.max(0, bottom - top)+'px;';
+    var tw = tip.offsetWidth, th = tip.offsetHeight;
+    var left = Math.min(vw - tw - 12, Math.max(12, r.left + r.width/2 - tw/2));
+    var y = (bottom + 12 + th < vh) ? bottom + 12 : (top - 12 - th > 0 ? top - 12 - th : Math.max(12, vh - th - 12));
+    y = Math.min(Math.max(12, y), Math.max(12, vh - th - 12));
+    tip.style.left = left + 'px';
+    tip.style.top = y + 'px';
+  }
+  // предложение пройти обучение: один раз, после приветствия или при первом запуске новой версии
+  function offerTour(delay){
+    try{ if(localStorage.getItem(TOUR_KEY)==='1') return; }catch(e){ return; }
+    setTimeout(function(){
+      if(state.modal || state.menuOpen || quick.open || tour || !isOnboarded()) return;
+      try{ localStorage.setItem(TOUR_KEY, '1'); }catch(e){}
+      showToast('🧭 '+T('Показать, как пользоваться приложением? Это займёт минуту.'), {action: T('Пройти обучение'), onAction: function(){ startTour('main'); }, duration: 10000});
+    }, delay || 1500);
+  }
+
+  // =====================================================================
   // ---------- ПЕРВЫЙ ЗАПУСК ----------
   // =====================================================================
   var ONB_KEY = 'lessoncal_onboarded';
@@ -3522,18 +3737,12 @@ function lessoncalBoot(){
         '<button type="button" class="btn onb-skip-acc" data-act="onb-skip-acc">'+T('Пропустить')+'</button>'+
         '<button type="button" class="btn primary onb-main" data-act="onb-next">'+T('Продолжить')+'</button>';
     } else {
-      var tips = [
-        ['☰', T('Доски'), T('Переключайтесь между досками и создавайте новые в меню слева сверху.')],
-        ['📅', T('Нажмите на день'), T('Откроются все записи и действия на этот день.')],
-        ['💬', T('Быстрый ввод'), T('На телефоне кнопка справа внизу: напишите «кофе 85» — и трата записана.')],
-        ['🔥', T('Огонёк'), T('Выполните все привычки и задачи на день — огонёк загорится сам. Держите серию!')]
-      ];
-      body = '<h2>'+T('Всё готово!')+'</h2><p>'+T('Пара подсказок, чтобы быстрее освоиться:')+'</p>'+
-        '<div class="onb-tips">'+tips.map(function(t, k){
-          return '<div class="onb-tip" style="animation-delay:'+(0.08*k+0.1).toFixed(2)+'s"><span class="onb-tip-i">'+t[0]+'</span><div><b>'+t[1]+'</b><span>'+t[2]+'</span></div></div>';
-        }).join('')+'</div>';
+      body = '<div class="onb-tour-ico">🧭</div><h2>'+T('Всё готово!')+'</h2>'+
+        '<p>'+T('Хотите пройти короткое обучение? За минуту покажем, где что находится и как этим пользоваться.')+'</p>'+
+        '<p class="dim onb-tour-note">'+T('Обучение всегда можно пройти ещё раз: меню ☰ → Настройки → «Обучение».')+'</p>';
       actions = '<button type="button" class="btn onb-back" data-act="onb-back">'+T('Назад')+'</button>'+
-        '<button type="button" class="btn primary onb-main" data-act="onb-finish">'+T('Поехали')+'</button>';
+        '<button type="button" class="btn" data-act="onb-finish">'+T('Позже')+'</button>'+
+        '<button type="button" class="btn primary onb-main" data-act="onb-finish-tour">'+T('Пройти обучение')+'</button>';
     }
     return '<div class="overlay onb-overlay"><div class="modal onb-modal" data-stop="1">'+
       '<button class="close-x" data-act="close-modal" aria-label="'+T('Пропустить')+'">✕</button>'+
@@ -4001,6 +4210,7 @@ function lessoncalBoot(){
     var html = '';
     html += renderHeader();
     html += '<div id="now-banner">'+nowBannerHtml()+'</div>';
+    if(activeBoard().type==='finance') html += finTourOfferHtml();
     html += '<div class="layout' + (pendingAnim ? ' ' + pendingAnim : '') + '">';
     pendingAnim = '';
     html += renderSidebar();
@@ -4028,6 +4238,8 @@ function lessoncalBoot(){
     if(state.modal==='onboarding') html += ov('onboarding', renderOnboarding());
     if(state.modal==='admin') html += ov('admin', renderAdminModal());
     if(state.modal==='presets') html += ov('presets', renderPresetsModal());
+    if(state.modal==='spending') html += ov('spending', renderSpendingModal());
+    if(state.modal==='tutorials') html += ov('tutorials', renderTutorialsModal());
     if(state.pendingBackup) html += ov('backup', renderBackupDialog(), true);
     if(state.confirmDeleteId) html += ov('confirm-board', renderConfirmDeleteBoardModal(), true);
     if(state.renameBoardId) html += ov('rename-board', renderRenameBoardModal(), true);
@@ -4063,7 +4275,6 @@ function lessoncalBoot(){
       if(!newKeys[k]) ghostOut(oldOverlays[k], newOverlays.length>0);
     });
     document.documentElement.classList.toggle('modal-open', newOverlays.length>0);
-    enhanceCalcInputs(app);
     attachHandlers();
     updateNowHighlight();
     applySearch();
@@ -4162,7 +4373,7 @@ function lessoncalBoot(){
     var q = (state.search||'').trim().toLowerCase();
     var wrap = app.querySelector('.cards');
     if(!wrap) return;
-    var cards = wrap.querySelectorAll('.punch-card');
+    var cards = wrap.querySelectorAll('.punch-card:not(.ghost-card)');
     var shown = 0;
     cards.forEach(function(c){
       var nm = c.querySelector('.pc-name .txt');
@@ -4260,10 +4471,38 @@ function lessoncalBoot(){
     return renderLessonsSidebar(ab);
   }
 
+  // полупрозрачные карточки-примеры на пустой доске: сразу видно, как это будет выглядеть
+  function ghostCards(kind){
+    var m = function(n){ return fmtMoney(n, DEFAULT_CURRENCY); };
+    var ex = {
+      lessons: [[T('Английский'), 'sky', T('Пн, Ср, Пт')+' · '+timeRangeStr({timeStart:'16:00', timeEnd:'17:00'})+'<br>'+T('Осталось')+' <b>6</b> '+T('из')+' 8'],
+                [T('Плавание'), 'sage', T('Вт, Чт')+' · '+timeRangeStr({timeStart:'08:00', timeEnd:'09:00'})+'<br>'+T('Абонемент до')+' <b>'+fmtHumanNoYear(fmt(addDays(todayD(), 20)))+'</b>']],
+      events: [[T('День рождения мамы'), 'rose', fmtHumanNoYear(fmt(addDays(todayD(), 12)))+' · '+inDaysText(12)],
+               [T('Годовщина'), 'lilac', T('Ежегодно ·')+' '+fmtHumanNoYear(fmt(addDays(todayD(), 40)))]],
+      planner: [[T('Купить продукты'), 'aqua', T('Пн')+' · '+timeRangeStr({timeStart:'10:00', timeEnd:'11:00'})],
+                [T('Позвонить маме'), 'rose', T('Ср')+' · '+T('разово')]],
+      schedule: [[T('Математика'), 'indigo', T('Пн, Ср')+' · '+timeRangeStr({timeStart:'08:30', timeEnd:'09:15'})],
+                 [T('История'), 'clay', T('Вт')+' · '+timeRangeStr({timeStart:'10:00', timeEnd:'10:45'})]],
+      income: [[T('Зарплата'), 'sage', '<b>'+m(40000)+'</b><br>'+T('Ежемесячно · ')+'5'+T(' числа')],
+               [T('Фриланс'), 'sky', '<b>'+m(6500)+'</b><br>'+T('Разово · ')+fmtHumanNoYear(fmt(addDays(todayD(), 9)))]],
+      expenses: [[T('Кафе'), 'clay', '<b>'+m(1200)+'</b><br>12'+T('% от расходов в ')+(CURRENCIES[DEFAULT_CURRENCY]||'')],
+                 [T('Магазин'), 'amber', '<b>'+m(4800)+'</b><br>'+T('Бюджет месяца')+': 80%']],
+      subs: [['Netflix', 'rose', '<b>'+m(299)+'</b> '+T('в месяц')],
+             ['Spotify', 'sage', '<b>'+m(199)+'</b> '+T('в месяц')]],
+      habits: [[T('Вода'), 'aqua', '🔥 <b>4</b> '+T('дня подряд')+' · 6 / 8'],
+               [T('Спорт'), 'clay', T('Пн, Ср, Пт')]]
+    }[kind] || [];
+    return ex.map(function(x){
+      return '<div class="punch-card ghost-card" aria-hidden="true"><div class="perf"></div>'+
+        '<div class="pc-head"><div class="pc-name"><span class="dot" style="background:'+(COLORS[x[1]]||COLORS.amber)+'"></span><span class="txt">'+x[0]+'</span></div>'+
+        '<span class="ghost-tag">'+T('Пример')+'</span></div>'+
+        '<div class="pc-body"><div class="pc-stats">'+x[2]+'</div></div></div>';
+    }).join('');
+  }
   function renderLessonsSidebar(ab){
     var html = '<div class="sidebar">'+renderRenewalNotice(ab)+T('<h2>Курсы</h2>')+renderSearchBox()+'<div class="cards">';
     if(ab.subjects.length===0){
-      html += T('<div class="empty" style="padding:20px 6px;"><div class="display">Пока пусто</div>Добавьте первый курс, чтобы начать отсчёт уроков.</div>');
+      html += T('<div class="empty" style="padding:20px 6px;"><div class="display">Пока пусто</div>Добавьте первый курс, чтобы начать отсчёт уроков.</div>')+ghostCards('lessons');
     }
     ab.subjects.forEach(function(s){
       var color = COLORS[s.color] || COLORS.amber;
@@ -4344,7 +4583,7 @@ function lessoncalBoot(){
   function renderEventsSidebar(ab){
     var html = T('<div class="sidebar"><h2>События</h2>')+renderSearchBox()+'<div class="cards">';
     if(ab.events.length===0){
-      html += T('<div class="empty" style="padding:20px 6px;"><div class="display">Пока пусто</div>Добавьте первое событие — например, день рождения.</div>');
+      html += T('<div class="empty" style="padding:20px 6px;"><div class="display">Пока пусто</div>Добавьте первое событие — например, день рождения.</div>')+ghostCards('events');
     }
     var sorted = ab.events.slice().sort(function(a,b){
       var na = nextOccurrence(a), nb = nextOccurrence(b);
@@ -4389,7 +4628,7 @@ function lessoncalBoot(){
   function renderScheduleSidebar(ab){
     var html = '<div class="sidebar"><h2>'+(ab.type==='planner'?T('Задачи'):T('Расписание'))+'</h2>'+renderSearchBox()+'<div class="cards">';
     if(ab.scheduleItems.length===0){
-      html += T('<div class="empty" style="padding:20px 6px;"><div class="display">Пока пусто</div>')+(ab.type==='planner'?T('Сначала добавьте задачу, а потом расставьте дни и время для неё.'):T('Сначала добавьте урок, а потом расставьте дни и время для него.'))+'</div>';
+      html += T('<div class="empty" style="padding:20px 6px;"><div class="display">Пока пусто</div>')+(ab.type==='planner'?T('Сначала добавьте задачу, а потом расставьте дни и время для неё.'):T('Сначала добавьте урок, а потом расставьте дни и время для него.'))+'</div>'+ghostCards(ab.type);
     }
     var sorted = ab.scheduleItems.slice().sort(function(a,b){ return a.name.localeCompare(b.name); });
     sorted.forEach(function(it){
@@ -4476,7 +4715,7 @@ function lessoncalBoot(){
   function renderIncomeSidebar(ab){
     var html = '<div class="sidebar">'+renderIncomePrompts(ab)+renderBalanceWidget(ab)+T('<h2>Доходы</h2>')+renderSearchBox()+'<div class="cards">';
     if(ab.income.length===0){
-      html += T('<div class="empty" style="padding:20px 6px;"><div class="display">Пока пусто</div>Добавьте зарплату, инвестиции или другой источник дохода.</div>');
+      html += T('<div class="empty" style="padding:20px 6px;"><div class="display">Пока пусто</div>Добавьте зарплату, инвестиции или другой источник дохода.</div>')+ghostCards('income');
     }
     var sorted = ab.income.slice().sort(function(a,b){
       var na = nextIncomeDate(a), nb = nextIncomeDate(b);
@@ -4551,7 +4790,7 @@ function lessoncalBoot(){
     if(flt==='subs'){
       html += (ab.subs.length ? renderSubsStats(ab) : '')+'<div class="cards">';
       if(!ab.subs.length){
-        html += '<div class="empty" style="padding:20px 6px;"><div class="display">'+T('Пока пусто')+'</div>'+T('Добавьте Netflix, Spotify, iCloud — приложение напомнит о списании и запишет его в расходы.')+'</div>';
+        html += '<div class="empty" style="padding:20px 6px;"><div class="display">'+T('Пока пусто')+'</div>'+T('Добавьте Netflix, Spotify, iCloud — приложение напомнит о списании и запишет его в расходы.')+'</div>'+ghostCards('subs');
       }
       sortedSubs(ab).forEach(function(x){ html += subCardHtml(x); });
       html += '</div><button class="add-card" data-act="open-add" data-kind="sub">+ '+T('Добавить подписку')+'</button></div>';
@@ -4560,7 +4799,7 @@ function lessoncalBoot(){
     html += '<div class="cards">';
     var list = ab.expenses.filter(function(e){ return flt!=='regular' || !subOfExpense(ab, e); });
     if(list.length===0){
-      html += T('<div class="empty" style="padding:20px 6px;"><div class="display">Пока пусто</div>Добавьте статьи расходов, чтобы увидеть их на колесе.</div>');
+      html += T('<div class="empty" style="padding:20px 6px;"><div class="display">Пока пусто</div>Добавьте статьи расходов, чтобы увидеть их на колесе.</div>')+(flt==='regular' && ab.expenses.length ? '' : ghostCards('expenses'));
     }
     var totalsByCur = {};
     ab.expenses.forEach(function(e){ totalsByCur[e.currency] = (totalsByCur[e.currency]||0) + e.amount; });
@@ -4775,9 +5014,62 @@ function lessoncalBoot(){
       '<div class="more-menu" role="menu">'+
         '<button type="button" role="menuitem" data-act="refresh-rates" data-to="'+display+'">↻ '+T('Обновить курсы')+'</button>'+
         '<button type="button" role="menuitem" data-act="open-rates">💱 '+T('Курсы валют')+'</button>'+
-        (withHistory ? '<button type="button" role="menuitem" data-act="open-history">🧾 '+T('История транзакций')+'</button>' : '')+
+        (withHistory ? '<button type="button" role="menuitem" data-act="open-history">🧾 '+T('История транзакций')+'</button>'+
+          '<button type="button" role="menuitem" data-act="open-spending" data-range="6m">📊 '+T('Статистика трат')+'</button>' : '')+
       '</div>'+
     '</div>';
+  }
+  // траты за длинный период: итог, в среднем за месяц и разбивка по категориям
+  function renderSpendingModal(){
+    var ab = activeBoard(), range = state.spendRange || '6m';
+    var t = todayD(), to = fmt(t), from;
+    if(range==='1m') from = fmt(new Date(t.getFullYear(), t.getMonth(), 1));
+    else if(range==='6m') from = fmt(new Date(t.getFullYear(), t.getMonth()-5, 1));
+    else if(range==='1y') from = fmt(new Date(t.getFullYear(), t.getMonth()-11, 1));
+    else from = '0000-00-00';
+    var disp = boardDisplayCurrency(ab), total = 0, other = {}, first = null;
+    var cats = ab.expenses.map(function(exp){
+      var sum = 0, oth = 0;
+      var addAmt = function(a){
+        if(exp.currency===disp){ sum += a; return; }
+        var r = getRate(ab, exp.currency, disp);
+        if(r!==null) sum += a*r; else { oth += a; other[exp.currency] = (other[exp.currency]||0) + a; }
+      };
+      (exp.history||[]).forEach(function(h){
+        if(!h.date || h.date<from || h.date>to) return;
+        if(!first || h.date<first) first = h.date;
+        if(range!=='all') addAmt(Number(h.amount) || 0);
+      });
+      // «за всё время» = сумма на карточке, как на колесе (туда входят и суммы, вписанные вручную без даты)
+      if(range==='all') addAmt(Math.max(0, Number(exp.amount) || 0));
+      total += sum;
+      return {exp: exp, sum: sum, oth: oth};
+    }).filter(function(c){ return c.sum>0 || c.oth>0; }).sort(function(a, c){ return c.sum - a.sum; });
+    var months = 1;
+    if(range==='6m') months = 6; else if(range==='1y') months = 12;
+    else if(first){ var f = parseD(first); months = Math.max(1, (t.getFullYear()-f.getFullYear())*12 + t.getMonth()-f.getMonth() + 1); }
+    var seg = [['1m', T('Месяц')], ['6m', T('6 месяцев')], ['1y', T('Год')], ['all', T('Всё время')]].map(function(o){
+      return '<button type="button" class="seg-btn'+(range===o[0]?' active':'')+'" data-act="open-spending" data-range="'+o[0]+'">'+o[1]+'</button>';
+    }).join('');
+    var max = cats.length ? cats[0].sum : 0;
+    var list = cats.length ? cats.map(function(c){
+      var pct = total>0 ? Math.round(c.sum/total*100) : 0;
+      return '<div class="sp-row"><div class="sp-head"><span class="dot" style="background:'+(COLORS[c.exp.color]||COLORS.amber)+'"></span>'+
+        '<span class="sp-name">'+escapeHtml(c.exp.name)+'</span><span class="sp-sum">'+fmtMoney2(c.sum, disp)+(c.oth ? ' + '+fmtMoney2(c.oth, c.exp.currency) : '')+' · '+pct+'%</span></div>'+
+        '<div class="budget-bar"><i style="width:'+(max>0 ? Math.max(2, Math.round(c.sum/max*100)) : 0)+'%;background:'+(COLORS[c.exp.color]||COLORS.amber)+'"></i></div></div>';
+    }).join('') : '<div class="empty" style="padding:18px 6px;">'+T('За этот период трат нет.')+'</div>';
+    var otherTxt = Object.keys(other).map(function(c){ return ' + '+fmtMoney2(other[c], c); }).join('');
+    return '<div class="overlay"><div class="modal narrow spending-modal" data-stop="1">'+
+      '<button class="close-x" data-act="close-modal">✕</button>'+
+      '<h3 class="display">'+T('Статистика трат')+'</h3>'+
+      '<div class="sub">'+escapeHtml(ab.name)+'</div>'+
+      '<div class="segmented sp-seg" role="tablist">'+seg+'</div>'+
+      '<div class="stats-summary'+(range==='1m' ? ' one' : ' two')+' sp-sum-box">'+
+        '<div><span>'+T('Всего')+'</span><b>'+fmtMoney2(total, disp)+otherTxt+'</b></div>'+
+        (range==='1m' ? '' : '<div><span>'+T('В среднем в месяц')+'</span><b>'+fmtMoney2(Math.round(total/months), disp)+'</b></div>')+
+      '</div>'+
+      list+
+    '</div></div>';
   }
   function renderExpenseWheel(ab){
     var curs = currenciesUsed(ab.expenses);
@@ -5993,52 +6285,46 @@ function lessoncalBoot(){
 
   function renderRatesModal(){
     var ab = activeBoard();
-    var keys = Object.keys(ab.rates);
-    var rows = keys.map(function(k){
-      var parts = k.split('_');
-      var from = parts[0], to = parts[1];
-      return ''+
-        '<div class="day-item">'+
-          '<div class="day-item-head"><span class="nm mono">1 '+from+' = '+fmtRate(ab.rates[k])+' '+to+'</span></div>'+
-          '<div class="row-actions">'+
-            '<button class="btn small" data-act="edit-rate" data-key="'+k+T('">Изменить</button>')+
-            '<button class="btn small danger" data-act="delete-rate" data-key="'+k+T('">Удалить</button>')+
-          '</div>'+
-        '</div>';
+    var base = (state.ratesBase && CURRENCIES[state.ratesBase]) ? state.ratesBase : boardDisplayCurrency(ab);
+    // все валюты в одной: «1 USD = 41.2 UAH», «1 EUR = 44.8 UAH»…
+    var rows = currencyOrder().filter(function(c){ return c!==base; }).map(function(c){
+      var r = getRate(ab, c, base);
+      return '<div class="rate-line'+(r===null?' none':'')+'"><span class="rl-cur">'+currencyLabel(c)+'</span>'+
+        '<span class="mono rl-val">'+(r!==null ? '1 '+c+' = <b>'+fmtRateNice(r)+'</b> '+base : T('нет данных — обновите курсы'))+'</span></div>';
     }).join('');
-    if(!rows){
-      rows = T('<div class="empty" style="padding:16px 6px;">Пока нет сохранённых курсов.</div>');
-    }
-    var editingKey = (state.editing && state.editing.kind==='rate') ? state.editing.key : null;
-    var editParts = editingKey ? editingKey.split('_') : null;
     return ''+
     '<div class="overlay">'+
-      '<div class="modal narrow" data-stop="1">'+
+      '<div class="modal narrow rates-modal" data-stop="1">'+
         '<button class="close-x" data-act="close-modal">✕</button>'+
         T('<h3 class="display">Курсы валют</h3>')+
-        T('<div class="sub">Сохранённые курсы конвертации для колеса расходов</div>')+
         '<div class="rates-auto">'+
           '<div class="rates-auto-text">'+T('Курсы подтягиваются автоматически при каждом запуске приложения.')+
             (ab.ratesAt ? '<br><span class="dim">'+T('Последнее обновление')+': '+escapeHtml(new Date(ab.ratesAt).toLocaleString(LOCALE, {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}))+'</span>' : '')+
           '</div>'+
           '<button type="button" class="btn small" data-act="refresh-rates">'+T('Обновить сейчас')+'</button>'+
         '</div>'+
-        rows+
-        '<div class="drawer-hr"></div>'+
-        '<form id="rate-form">'+
-          (editingKey?'<input type="hidden" name="oldKey" value="'+editingKey+'">':'')+
-          '<div class="field-row">'+
-            T('<div class="field" style="flex:1;"><label>Из</label><select name="from">')+currencyOptionsHtml(editParts?editParts[0]:CURRENCY_KEYS[0])+'</select></div>'+
-            T('<div class="field" style="flex:1;"><label>В</label><select name="to">')+currencyOptionsHtml(editParts?editParts[1]:CURRENCY_KEYS[1])+'</select></div>'+
-          '</div>'+
-          T('<div class="field"><label>Курс (1 «Из» = ? «В»)</label><input type="number" step="any" min="0" name="value" value="')+(editingKey?fmtRate(ab.rates[editingKey]):'')+'" required></div>'+
-          '<div class="modal-actions">'+
-            (editingKey?T('<button type="button" class="btn" data-act="cancel-edit-rate">Отмена</button>'):'')+
-            '<button type="submit" class="btn primary">'+(editingKey?T('Сохранить'):T('Добавить курс'))+'</button>'+
-          '</div>'+
-        '</form>'+
+        '<div class="rates-base"><span>'+T('Посмотреть все курсы в')+'</span><select data-act="set-rates-base">'+currencyOptionsHtml(base)+'</select></div>'+
+        '<div class="rates-list">'+rows+'</div>'+
+        '<details class="rates-manual"><summary>'+T('Задать курс вручную')+'</summary>'+
+          '<div class="field-hint" style="margin:6px 0 10px;">'+T('Пригодится без интернета. При следующем обновлении курс заменится свежим.')+'</div>'+
+          '<form id="rate-form">'+
+            '<div class="field-row">'+
+              T('<div class="field" style="flex:1;"><label>Из</label><select name="from">')+currencyOptionsHtml(currencyOrder()[1] || CURRENCY_KEYS[1])+'</select></div>'+
+              T('<div class="field" style="flex:1;"><label>В</label><select name="to">')+currencyOptionsHtml(base)+'</select></div>'+
+            '</div>'+
+            T('<div class="field"><label>Курс (1 «Из» = ? «В»)</label><input type="number" step="any" min="0" name="value" value="')+'" required></div>'+
+            '<div class="modal-actions"><button type="submit" class="btn primary">'+T('Добавить курс')+'</button></div>'+
+          '</form>'+
+        '</details>'+
       '</div>'+
     '</div>';
+  }
+  // курс для списка: крупные — 2 знака, мелкие — 4 значащие цифры
+  function fmtRateNice(r){
+    var v = Number(r);
+    if(v >= 100) return v.toLocaleString(LOCALE, {maximumFractionDigits: 2});
+    if(v >= 1) return v.toLocaleString(LOCALE, {maximumFractionDigits: 3});
+    return v.toLocaleString(LOCALE, {maximumSignificantDigits: 4});
   }
 
   function renderTransactionHistoryModal(){
@@ -6142,7 +6428,7 @@ function lessoncalBoot(){
             T('<span>Выбрать тип доски: ')+BOARD_TYPE_LABELS[state.newBoardType]+'</span><span>'+(state.boardTypePickerOpen?'▲':'▼')+'</span>'+
           '</button>'+
           typePickerOptions+
-          T('<div class="field-row" style="margin-top:10px;"><input type="text" id="new-board-name" placeholder="Название доски"><button class="btn primary" data-act="create-board">+</button></div>')+
+          '<div class="new-board-box"><input type="text" id="new-board-name" placeholder="'+escapeHtml(T('Название доски'))+'"><button type="button" class="btn primary new-board-btn" data-act="create-board">+ '+T('Создать доску')+'</button></div>'+
         '</div>'+
         '<div class="drawer-hr"></div>'+
         T('<button type="button" class="btn" style="width:100%;" data-act="open-settings">⚙ Настройки</button>')+
@@ -6255,7 +6541,7 @@ function lessoncalBoot(){
 
         group(T('Быстрый ввод'),
           '<button type="button" class="set-btn" data-act="open-presets"><span class="set-ico">⚡</span><span>'+T('Частые траты')+'<small>'+T('Кнопки в быстром вводе: одно нажатие — и трата записана в нужную категорию.')+'</small></span></button>'
-        )+
+        ).replace('class="set-group"', 'class="set-group phone-only"')+
         group(T('Данные'),
           '<button type="button" class="set-btn" data-act="download-backup"><span class="set-ico">⬇</span><span>'+T('Скачать копию всех досок')+'<small>'+T('Если браузер очистит данные, из этого файла можно всё восстановить.')+'</small></span></button>'+
           '<button type="button" class="set-btn" data-act="download-board"><span class="set-ico">↗</span><span>'+T('Поделиться текущей доской')+'<small>'+T('Файл можно отправить в мессенджере или по почте.')+'</small></span></button>'+
@@ -6265,6 +6551,9 @@ function lessoncalBoot(){
           '</div>'
         )+
 
+        group(T('Обучение'),
+          '<button type="button" class="set-btn" data-act="open-tutorials"><span class="set-ico">🎓</span><span>'+T('Обучение')+'<small>'+T('Основы приложения и отдельное обучение по каждой доске.')+'</small></span><span class="set-chev">›</span></button>'
+        )+
         group(T('О приложении'),
           '<button type="button" class="set-btn" data-act="show-onboarding"><span class="set-ico">👋</span><span>'+T('Показать приветствие')+'<small>'+T('Ещё раз пройти первый запуск и добавить доски.')+'</small></span></button>'
         )+
@@ -7211,17 +7500,33 @@ function lessoncalBoot(){
   function anyDialog(){ return !!(state.confirmDeleteId || state.renameBoardId || state.confirmCard || state.pendingBackup); }
 
   // ---------- кнопка «Назад» на Android / жест назад: закрывает окно, а не приложение ----------
-  // Пока открыто любое окно, в истории браузера лежит одна «пустая» запись. Назад снимает её — и мы закрываем верхнее окно.
-  var histGuard = false, histIgnore = 0;
-  function anyLayerOpen(){ return !!(state.modal || state.menuOpen || anyDialog() || (typeof quick!=='undefined' && quick.open)); }
+  // На каждый открытый «слой» (меню, окно, окно поверх окна, быстрый ввод, обучение) в истории браузера лежит своя запись.
+  // Записи добавляются сразу при нажатии пользователя (иначе Chrome их пропускает и «Назад» закрывает приложение),
+  // а «Назад» снимает одну запись — и мы закрываем ровно один слой.
+  var histDepth = 0, histIgnore = 0;
+  function layerDepth(){
+    var d = 0;
+    if(state.modal) d += 1 + ((state.navStack && state.navStack.length) || 0);
+    else if(state.menuOpen) d += 1;
+    if(anyDialog()) d += 1;
+    if(typeof quick!=='undefined' && quick.open) d += 1;
+    if(tour) d += 1;
+    return d;
+  }
   function syncHistory(){
     try{
-      var open = anyLayerOpen();
-      if(open && !histGuard){ history.pushState({lcLayer: 1}, ''); histGuard = true; }
-      else if(!open && histGuard){ histGuard = false; histIgnore++; history.back(); }
+      var want = layerDepth();
+      while(histDepth < want){ history.pushState({lcLayer: histDepth+1}, ''); histDepth++; }
+      if(histDepth > want){
+        var n = histDepth - want;
+        histDepth = want;
+        histIgnore++;
+        history.go(-n);
+      }
     }catch(e){}
   }
   function closeTopLayer(){
+    if(tour){ endTour(); return; }
     if(quick.open){ closeQuick(); return; }
     if(anyDialog()){ closeDialogs(); return; }
     if(state.modal && state.navStack && state.navStack.length){
@@ -7232,9 +7537,8 @@ function lessoncalBoot(){
   }
   window.addEventListener('popstate', function(){
     if(histIgnore > 0){ histIgnore--; return; }
-    histGuard = false;
-    if(anyLayerOpen()) closeTopLayer();
-    // если под закрытым окном есть ещё одно — снова ставим «пустую» запись
+    if(histDepth > 0) histDepth--;
+    if(layerDepth() > histDepth) closeTopLayer();
     setTimeout(syncHistory, 0);
   });
   function closeDialogs(){
@@ -7311,6 +7615,23 @@ function lessoncalBoot(){
           if(i>0){ var t0 = list[i-1]; list[i-1] = list[i]; list[i] = t0; savePresets(list); qRenderPresets(); render(); }
         })();
         break;
+      case 'start-tour':
+        startTour('main');
+        break;
+      case 'start-fin-tour':
+        startTour('finance');
+        break;
+      case 'open-tutorials':
+        if(state.modal==='settings') state.navStack = (state.navStack || []).concat(['settings']);
+        state.modal = 'tutorials'; render();
+        break;
+      case 'start-tutorial':
+        startTour(el.dataset.kind);
+        break;
+      case 'dismiss-fin-tour':
+        try{ localStorage.setItem(FIN_TOUR_KEY, '1'); }catch(e){}
+        render();
+        break;
       case 'tp-ap':
         (function(){
           el.dataset.ap = el.dataset.ap==='PM' ? 'AM' : 'PM';
@@ -7324,12 +7645,25 @@ function lessoncalBoot(){
         TIME12 = el.dataset.t12==='12';
         render();
         break;
+      case 'open-spending':
+        state.spendRange = el.dataset.range || '6m';
+        state.modal = 'spending'; state.menuOpen = false; render();
+        break;
       case 'toggle-more':
         (function(){
           var w = el.closest('.more-wrap');
           var open = !w.classList.contains('open');
           app.querySelectorAll('.more-wrap.open').forEach(function(x){ x.classList.remove('open'); });
           w.classList.toggle('open', open);
+          // меню не должно вылезать за край экрана (на телефоне это сдвигало страницу)
+          var mm = w.querySelector('.more-menu');
+          if(open && mm){
+            mm.style.left = ''; mm.style.right = '';
+            var r = mm.getBoundingClientRect(), vw = document.documentElement.clientWidth;
+            if(r.right > vw - 8){ mm.style.left = 'auto'; mm.style.right = '0'; }
+            r = mm.getBoundingClientRect();
+            if(r.left < 8){ mm.style.right = 'auto'; mm.style.left = (8 - w.getBoundingClientRect().left) + 'px'; }
+          }
         })();
         break;
       case 'move-tomorrow':
@@ -7502,7 +7836,10 @@ function lessoncalBoot(){
         withUndo(T('Баланс удалён'), function(){ deleteBalance(el.dataset.id); });
         break;
       case 'open-rates':
-        state.modal = 'rates'; state.menuOpen = false; state.editing = null; render(); break;
+        state.modal = 'rates'; state.menuOpen = false; state.editing = null; render();
+        // курсов ещё нет или они старые — подтягиваем прямо сейчас
+        (function(){ var c = loadRatesCache(); if(!c || Date.now()-c.ts > 60*60*1000) autoRefreshRates(); })();
+        break;
       case 'edit-rate':
         state.editing = {kind:'rate', key: el.dataset.key};
         render();
@@ -7633,7 +7970,12 @@ function lessoncalBoot(){
         location.reload();
         break;
       case 'onb-finish':
+        try{ localStorage.setItem(TOUR_KEY, '1'); }catch(e){}
         finishOnboarding();
+        break;
+      case 'onb-finish-tour':
+        finishOnboarding();
+        startTour('main');
         break;
       case 'show-onboarding':
         startOnboarding();
@@ -7783,6 +8125,10 @@ function lessoncalBoot(){
     }
     if(t && t.dataset && t.dataset.act==='edit-paiduntil'){
       updatePaidUntil(t.dataset.id, t.value);
+    }
+    if(t && t.dataset && t.dataset.act==='set-rates-base'){
+      state.ratesBase = t.value;
+      render();
     }
     if(t && t.dataset && t.dataset.act==='set-exp-filter'){
       state.expFilter = t.value;
@@ -7979,6 +8325,7 @@ function lessoncalBoot(){
       return;
     }
     if(ev.key!=='Escape') return;
+    if(tour){ endTour(); return; }
     if(quick.open){ closeQuick(); return; }
     if(anyDialog()){ closeDialogs(); return; }
     if(state.modal || state.menuOpen){ closeTopModal(); }
@@ -7992,6 +8339,7 @@ function lessoncalBoot(){
   loadData();
   autoRefreshRates();
   checkBackupReminder();
+  offerTour(2200);
   document.addEventListener('visibilitychange', function(){
     if(document.visibilityState!=='visible') return;
     var c = loadRatesCache();
