@@ -3537,12 +3537,23 @@ function lessoncalBoot(){
     ].filter(function(x){ return x && (!x.sel || tourTarget(x.sel)); });
   }
   // небольшой блок на доске финансов: «Впервые здесь? Пройдите обучение» с крестиком
-  function finTourOfferHtml(){
-    try{ if(localStorage.getItem(FIN_TOUR_KEY)==='1') return ''; }catch(e){ return ''; }
-    return '<div class="tour-offer"><span class="to-ico">🧭</span><span class="to-text"><b>'+T('Как устроены финансы?')+'</b>'+
-      T('Короткое обучение: доходы, расходы, баланс и статистика.')+'</span>'+
-      '<button type="button" class="btn small primary" data-act="start-fin-tour">'+T('Пройти')+'</button>'+
-      '<button type="button" class="close-x to-x" data-act="dismiss-fin-tour" aria-label="'+T('Закрыть')+'">✕</button></div>';
+  // блок сверху доски: предложение пройти обучение по этому типу доски (один раз)
+  var TOUR_OFFERS = {
+    finance: ['Как устроены финансы?', 'Короткое обучение: доходы, расходы, баланс и статистика.'],
+    lessons: ['Как устроены занятия?', 'Короткое обучение: курсы, оплата, продление и перенос уроков.'],
+    schedule: ['Как устроено расписание?', 'Короткое обучение: предметы, дни недели и расписание на день.'],
+    planner: ['Как устроен планер?', 'Короткое обучение: задачи, отметки, перенос на завтра и огонёк.'],
+    habits: ['Как устроены привычки?', 'Короткое обучение: отметки, серии и как зажечь огонёк.']
+  };
+  function tourKeyFor(kind){ return kind==='finance' ? FIN_TOUR_KEY : kind==='main' ? TOUR_KEY : 'lessoncal_tour_'+kind; }
+  function boardTourOfferHtml(kind){
+    var o = TOUR_OFFERS[kind];
+    if(!o) return '';
+    try{ if(localStorage.getItem(tourKeyFor(kind))==='1') return ''; }catch(e){ return ''; }
+    var ico = (TUTORIALS.find(function(x){ return x.kind===kind; }) || {}).ico || '🧭';
+    return '<div class="tour-offer"><span class="to-ico">'+ico+'</span><span class="to-text"><b>'+T(o[0])+'</b>'+T(o[1])+'</span>'+
+      '<button type="button" class="btn small primary" data-act="start-tutorial" data-kind="'+kind+'">'+T('Пройти')+'</button>'+
+      '<button type="button" class="close-x to-x" data-act="dismiss-board-tour" data-kind="'+kind+'" aria-label="'+T('Закрыть')+'">✕</button></div>';
   }
   function tourTarget(sel){
     var list = document.querySelectorAll(sel);
@@ -3576,7 +3587,7 @@ function lessoncalBoot(){
   }
   function startTour(kind){
     if(!TUTORIALS.some(function(x){ return x.kind===kind; })) kind = 'main';
-    try{ localStorage.setItem(kind==='finance' ? FIN_TOUR_KEY : TOUR_KEY, '1'); }catch(e){}
+    try{ localStorage.setItem(tourKeyFor(kind), '1'); }catch(e){}
     if(kind!=='main' && activeBoard().type!==kind){
       var same = state.boards.filter(function(b){ return b.type===kind; });
       var fb = same.find(function(b){ return (b.subjects && b.subjects.length) || (b.scheduleItems && b.scheduleItems.length) || (b.habits && b.habits.length); }) || same[0];
@@ -4210,7 +4221,7 @@ function lessoncalBoot(){
     var html = '';
     html += renderHeader();
     html += '<div id="now-banner">'+nowBannerHtml()+'</div>';
-    if(activeBoard().type==='finance') html += finTourOfferHtml();
+    html += boardTourOfferHtml(activeBoard().type);
     html += '<div class="layout' + (pendingAnim ? ' ' + pendingAnim : '') + '">';
     pendingAnim = '';
     html += renderSidebar();
@@ -7629,7 +7640,8 @@ function lessoncalBoot(){
         startTour(el.dataset.kind);
         break;
       case 'dismiss-fin-tour':
-        try{ localStorage.setItem(FIN_TOUR_KEY, '1'); }catch(e){}
+      case 'dismiss-board-tour':
+        try{ localStorage.setItem(tourKeyFor(el.dataset.kind || 'finance'), '1'); }catch(e){}
         render();
         break;
       case 'tp-ap':
